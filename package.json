@@ -1,12 +1,37 @@
 {
   "name": "amness-eval-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run coding-agent benchmarks as resumable campaigns and watch them live in a browser (Terminal-Bench via Harbor; built for Amness, works with any Harbor agent).",
   "type": "module",
-  "bin": { "amness-studio": "bin/studio.mjs" },
-  "engines": { "node": ">=20" },
-  "scripts": { "test": "node --test test/", "serve": "node bin/studio.mjs serve" },
+  "bin": {
+    "amness-studio": "bin/studio.mjs"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "node --test test/",
+    "serve": "node bin/studio.mjs serve"
+  },
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/amirsdream/amness-eval-studio.git" },
-  "keywords": ["benchmark", "coding-agent", "terminal-bench", "harbor", "evaluation", "amness"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amirsdream/amness-eval-studio.git"
+  },
+  "keywords": [
+    "benchmark",
+    "coding-agent",
+    "terminal-bench",
+    "harbor",
+    "evaluation",
+    "amness"
+  ],
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.7"
+  }
 }

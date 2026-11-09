@@ -1,0 +1,21 @@
+[Unit]
+Description=Amness Evaluation Studio (UI, live stream and campaign runner)
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+# STUDIO_TOKEN (the token the browser controls need) lives in /etc/amness-studio.env.
+EnvironmentFile=-/etc/amness-studio.env
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/root
+WorkingDirectory=/opt/amness-eval-studio
+ExecStart=/usr/bin/node bin/studio.mjs serve --port 8090
+# On stop or restart, the run in progress is interrupted (Harbor removes its containers) and runs again when the studio is back.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

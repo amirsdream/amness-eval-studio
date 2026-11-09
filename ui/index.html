@@ -3,27 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Amness Evaluation Studio</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Evaluation Studio</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%238b7cf6'/%3E%3C/svg%3E">
 </head>
 <body>
-  <header class="top">
-    <div class="brand"><span class="mark"></span> Evaluation Studio</div>
-    <select id="campaign" aria-label="Campaign"></select>
-    <span class="spacer"></span>
-    <span id="conn" class="conn" title="Live connection">connecting…</span>
-  </header>
-  <main>
-    <section class="card" id="progress"></section>
-    <section class="card live" id="live"></section>
-    <div class="cols">
-      <section class="card" id="variants"></section>
-      <section class="card" id="grid"></section>
-    </div>
-    <section class="card" id="history"></section>
-  </main>
-  <aside id="drawer" class="drawer hidden" aria-label="Run details"></aside>
-  <script src="app.js"></script>
+  <div id="root"></div>
+  <script type="module" src="./src/main.jsx"></script>
 </body>
 </html>
