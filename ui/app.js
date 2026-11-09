@@ -12,6 +12,8 @@ function h(tag, props, ...kids) {
   for (const c of kids.flat()) if (c !== undefined && c !== null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return el;
 }
+/** Replace an element's children, skipping empty slots (replaceChildren would print "null"). */
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
 const fmtDur = (s) => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m` : s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`; };
 const fmtNum = (n) => (n === null || n === undefined || !Number.isFinite(n) ? "–" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n));
 const pct = (x) => (x === null || x === undefined ? "–" : Math.round(x * 100) + "%");
@@ -22,7 +24,7 @@ let campaign = new URLSearchParams(location.search).get("campaign") || "", ov = 
 
 async function start() {
   const list = await fetch("/api/campaigns").then((r) => r.json()).catch(() => []);
-  $("campaign").replaceChildren(...list.map((c) => h("option", { value: c.name, selected: c.name === campaign || undefined, text: `${c.name}${c.total ? ` (${c.done}/${c.total})` : ""}${c.running ? " · running" : ""}` })));
+  fill($("campaign"), ...list.map((c) => h("option", { value: c.name, selected: c.name === campaign || undefined, text: `${c.name}${c.total ? ` (${c.done}/${c.total})` : ""}${c.running ? " · running" : ""}` })));
   if (!campaign && list.length) campaign = (list.find((c) => c.running) ?? list[0]).name;
   $("campaign").value = campaign;
   $("campaign").onchange = () => { campaign = $("campaign").value; history.replaceState(null, "", `?campaign=${encodeURIComponent(campaign)}`); connect(); };
@@ -36,7 +38,7 @@ function connect() {
   es.onopen = () => { $("conn").textContent = "live"; $("conn").className = "conn on"; };
   es.onerror = () => { $("conn").textContent = "reconnecting…"; $("conn").className = "conn off"; };
   es.onmessage = (m) => {
-    const d = JSON.parse(m.data); if (d.error) { $("progress").replaceChildren(h("div", { class: "empty", text: d.error })); return; }
+    const d = JSON.parse(m.data); if (d.error) { fill($("progress"), h("div", { class: "empty", text: d.error })); return; }
     ov = d.overview;
     if (d.live) {
       if (d.live.job !== live.job) live = { job: d.live.job, events: [] };
@@ -54,7 +56,7 @@ function render() {
 
 function renderProgress() {
   const p = ov.total ? ov.done / ov.total : 0;
-  $("progress").replaceChildren(
+  fill($("progress"), 
     h("h2", { text: ov.name }), ov.about ? h("div", { class: "muted small", text: ov.about }) : null,
     h("div", { class: "bar" }, h("i", { style: `width:${(p * 100).toFixed(1)}%` })),
     h("div", { class: "kv" },
@@ -77,13 +79,13 @@ function spark(values) {
 
 function renderLive() {
   const c = ov.current;
-  if (!c) { $("live").replaceChildren(h("h2", { text: "Now" }), h("div", { class: "empty", text: ov.left ? "No run in progress: the campaign is paused or between runs." : "The campaign is complete." })); return; }
+  if (!c) { fill($("live"), h("h2", { text: "Now" }), h("div", { class: "empty", text: ov.left ? "No run in progress: the campaign is paused or between runs." : "The campaign is complete." })); return; }
   const order = ["setting up", "agent", "testing", "done"], at = order.indexOf(live.phase ?? c.phase);
   const u = live.usage ?? c.usage ?? {}, cached = u.prompt ? u.cached / u.prompt : null;
   const feed = h("div", { class: "feed", id: "feed" }, ...(live.events.length ? live.events : []).map((e) =>
     h("div", { class: `ev ${e.k}${e.error ? " err" : ""}` }, h("span", { class: "ic", text: ICON[e.k] ?? "·" }), h("span", { class: "nm", text: e.name ?? e.k }), h("span", { class: "tx", text: e.text }))));
   if (!live.events.length) feed.append(h("div", { class: "ev" }, h("span"), h("span", { class: "nm", text: "…" }), h("span", { class: "tx muted", text: live.phase === "setting up" ? "setting up the task container" : "waiting for the agent's first step" })));
-  $("live").replaceChildren(
+  fill($("live"), 
     h("label", { class: "auto" }, h("input", { type: "checkbox", checked: autoScroll || undefined, onchange: (e) => (autoScroll = e.target.checked) }), "follow"),
     h("h2", { text: "Now" }),
     h("div", { class: "kv" }, h("b", { text: c.task }), h("span", { text: `variant ${c.variant}` }), h("span", { text: `trial ${c.trial}` }), h("span", { class: "muted", id: "elapsed", "data-started": c.started })),
@@ -102,7 +104,7 @@ function renderElapsed() { const e = $("elapsed"); if (e?.dataset.started) e.tex
 
 function renderVariants() {
   const base = ov.variants[0];
-  $("variants").replaceChildren(h("h2", { text: "Variants" }), h("div", { class: "scroll" }, h("table", {},
+  fill($("variants"), h("h2", { text: "Variants" }), h("div", { class: "scroll" }, h("table", {},
     h("tr", {}, ...["variant", "passed", "95% interval", `vs ${base}`, "timeouts", "tokens sent", "per solved", "time"].map((t, i) => h("th", { class: i >= 4 ? "num" : "", text: t }))),
     ...ov.summary.map((s) => h("tr", {},
       h("td", { class: "mono", text: s.variant }),
@@ -115,7 +117,7 @@ function renderVariants() {
 
 function renderGrid() {
   const latest = new Map(); for (const r of ov.results) latest.set(`${r.task}|${r.variant}`, r);
-  $("grid").replaceChildren(h("h2", { text: "Tasks" }), h("div", { class: "scroll" }, h("table", {},
+  fill($("grid"), h("h2", { text: "Tasks" }), h("div", { class: "scroll" }, h("table", {},
     h("tr", {}, h("th", { text: "task" }), ...ov.variants.map((v) => h("th", { text: v }))),
     ...ov.tasks.map((t) => h("tr", {}, h("td", { class: "mono", text: t }), ...ov.variants.map((v) => {
       const r = latest.get(`${t}|${v}`), now = ov.current && ov.current.task === t && ov.current.variant === v;
@@ -127,7 +129,7 @@ function renderGrid() {
 
 function renderHistory() {
   const rs = [...ov.results].reverse().slice(0, 60);
-  $("history").replaceChildren(h("h2", { text: `Finished runs (${ov.results.length})` }), rs.length ? h("div", { class: "scroll" }, h("table", { class: "hist" },
+  fill($("history"), h("h2", { text: `Finished runs (${ov.results.length})` }), rs.length ? h("div", { class: "scroll" }, h("table", { class: "hist" },
     h("tr", {}, ...["when", "task", "variant", "result", "time", "tokens sent", "cached", "received"].map((t, i) => h("th", { class: i >= 4 ? "num" : "", text: t }))),
     ...rs.map((r) => h("tr", { onclick: () => openRun(r) },
       h("td", { class: "muted", text: new Date(r.at).toLocaleString() }), h("td", { class: "mono", text: r.task }), h("td", { class: "mono", text: r.variant }),
@@ -137,10 +139,10 @@ function renderHistory() {
 
 async function openRun(r) {
   const d = $("drawer"); d.classList.remove("hidden");
-  d.replaceChildren(h("button", { class: "close", onclick: () => d.classList.add("hidden"), text: "Close" }), h("h2", { text: `${r.task} · ${r.variant} · trial ${r.trial}` }), h("div", { class: "empty", text: "loading…" }));
+  fill(d, h("button", { class: "close", onclick: () => d.classList.add("hidden"), text: "Close" }), h("h2", { text: `${r.task} · ${r.variant} · trial ${r.trial}` }), h("div", { class: "empty", text: "loading…" }));
   const j = await fetch(`/api/job/${encodeURIComponent(r.job)}`).then((x) => x.json()).catch(() => null);
   if (!j) return;
-  d.replaceChildren(
+  fill(d, 
     h("button", { class: "close", onclick: () => d.classList.add("hidden"), text: "Close" }),
     h("h2", { text: `${r.task} · ${r.variant} · trial ${r.trial}` }),
     h("div", { class: "kv" }, h("span", {}, h("span", { class: `cell ${outcome(r)}`, text: outcome(r) })), h("span", { text: fmtDur(r.seconds) }), h("span", { text: `${fmtNum(r.tokensIn)} sent · ${fmtNum(r.tokensCached)} cached · ${fmtNum(r.tokensOut)} received` }), h("span", { class: "muted mono small", text: r.job })),

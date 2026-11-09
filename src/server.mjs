@@ -16,7 +16,7 @@ export function overview(name) {
   return {
     name, about: c.plan.about ?? "", model: c.plan.model, dataset: c.plan.dataset ?? "terminal-bench@2.0", tasks: c.tasks, variants: c.variants, total: c.runs.length,
     done: rs.length, left: left.length, etaSeconds: left.length * per, perRunSeconds: per, next: left[0] ?? null,
-    summary: summarize(rs, c.variants), results: rs, current: cur ? { ...cur, ...jobView(cur.job, Number.MAX_SAFE_INTEGER) } : null,
+    summary: summarize(rs, c.variants), results: rs, current: cur ? { ...jobView(cur.job, Number.MAX_SAFE_INTEGER), ...cur } : null,   // the plan's task and variant win over what the job folder knows so far
   };
 }
 
