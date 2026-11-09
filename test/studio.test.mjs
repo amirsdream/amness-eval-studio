@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -174,4 +174,10 @@ test("server: requests straight from a trusted network need no token; through a 
     assert.equal((await post({ "x-forwarded-for": "8.8.8.8" })).status, 401);                // through a proxy: the token is needed
     assert.equal((await post({ "x-forwarded-for": "8.8.8.8", "x-studio-token": "s3cret" })).status, 200);
   } finally { srv.close(); }
+});
+
+test("overview: the run in progress is part of the campaign's picture (it was once commented out by mistake)", async () => {
+  const { overview } = await import("../src/server.mjs");
+  const c = loadCampaign("demo"); writeFileSync(c.current, JSON.stringify({ task: "alpha", variant: "full", trial: 1, job: "job-x", started: new Date().toISOString() }));
+  try { const o = overview("demo"); assert.ok("current" in o); assert.equal(o.current.job, "job-x"); } finally { rmSync(c.current, { force: true }); }
 });

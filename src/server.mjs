@@ -89,7 +89,7 @@ export function overview(name) {
   return {
     name, purpose: c.plan.purpose ?? "", about: c.plan.about ?? "", model: c.plan.model, setup: campaignSetup(c, rs, cur), dataset: c.plan.dataset ?? "terminal-bench@2.0", tasks: c.tasks, variants: c.variants, total: c.runs.length, trials: c.plan.trials ?? 1,
     done: rs.length, left: left.length, etaSeconds: left.length * per, perRunSeconds: per, next: left[0] ?? null, upcoming: left.filter((r) => !cur || runKey(r) !== runKey(cur)).slice(0, 6),
-    summary: summarize(rs, c.variants), checks: campaignFindings(rs), results: rs.map(({ setup, ...r }) => ({ ...r, build: setup?.build?.version ?? null })),   // the full setup comes with the run (/api/job) current: cur ? { ...jobView(cur.job, -1), ...cur } : null,   // the plan's task and variant win over what the job folder knows so far
+    summary: summarize(rs, c.variants), checks: campaignFindings(rs), results: rs.map(({ setup, ...r }) => ({ ...r, build: setup?.build?.version ?? null })), current: cur ? { ...jobView(cur.job, -1), ...cur } : null,   // the plan's task and variant win over what the job folder knows so far
   };
 }
 
