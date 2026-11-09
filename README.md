@@ -86,7 +86,7 @@ Every run is read for patterns that point at the harness, not only the model: a 
 | **■ Stop now** | Interrupts the run in progress; it is not recorded and runs again on resume. |
 | **↻ Run again** (in a run) | Sets that result aside (kept in `results.removed.jsonl`) and queues the run again. |
 
-The controls, adding builds and creating campaigns need the studio's token when `STUDIO_TOKEN` is set (the installer makes one); the browser asks for it once. The studio remembers what it was doing, and carries on after a restart.
+The controls, adding builds and creating campaigns need the studio's token when `STUDIO_TOKEN` is set (the installer makes one); the browser asks for it once. Requests straight from a network you trust need no token: set `STUDIO_TRUST=192.168.1.0/24` (ranges, comma separated) in `/etc/amness-studio.env`. A request that comes through a proxy (it carries `X-Forwarded-For`, `Forwarded` or `X-Real-IP`) always needs the token, so a reverse proxy you add for remote access cannot open the controls to the internet. The studio remembers what it was doing, and carries on after a restart.
 
 A run where Harbor failed before the agent started, or that was cancelled, is not a result about the agent: it is not recorded and runs again. Three such failures in a row stop the campaign.
 

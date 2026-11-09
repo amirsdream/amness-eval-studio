@@ -160,3 +160,18 @@ test("builds: a packed file becomes an unchanging build with a manifest; a campa
   const row = results(loadCampaign("rec"))[0];
   assert.equal(row.setup.build.version, "9.9.9"); assert.ok(row.setup.command.includes("--job-name")); assert.ok(row.setup.where.host); assert.equal(row.setup.options.package.endsWith("package.tgz"), true);
 });
+
+test("server: requests straight from a trusted network need no token; through a proxy they do; ranges are checked", async () => {
+  const { serve, parseTrust, trusted } = await import("../src/server.mjs");
+  const r = parseTrust("192.168.1.0/24, 10.0.0.5");
+  assert.ok(trusted(r, "192.168.1.77") && trusted(r, "::ffff:192.168.1.3") && trusted(r, "10.0.0.5"));
+  assert.ok(!trusted(r, "192.168.2.1") && !trusted(r, "10.0.0.6") && !trusted(r, "::1"));
+  assert.throws(() => parseTrust("192.168.1.0/40"), /not an IPv4 range/);
+  const srv = serve({ port: 0, host: "127.0.0.1", token: "s3cret", trust: "127.0.0.0/8", resume: false }); await new Promise((ok) => srv.once("listening", ok));
+  const url = `http://127.0.0.1:${srv.address().port}/api/control`, post = (h = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify({ action: "pause" }) });
+  try {
+    assert.equal((await post()).status, 200);                                                 // from the trusted range, no token
+    assert.equal((await post({ "x-forwarded-for": "8.8.8.8" })).status, 401);                // through a proxy: the token is needed
+    assert.equal((await post({ "x-forwarded-for": "8.8.8.8", "x-studio-token": "s3cret" })).status, 200);
+  } finally { srv.close(); }
+});

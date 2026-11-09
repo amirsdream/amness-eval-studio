@@ -1,6 +1,7 @@
 // The studio's server: the UI (ui/dist, built with `npm run build`), a JSON API, a live stream (Server-Sent Events) that pushes the campaign,
 // the runner's state and the running agent's conversation as it grows, and the controls (start, pause, stop now, resume, run again, warm up).
-// The controls need the token (STUDIO_TOKEN) when one is set; without one, anyone who can reach the port can use them.
+// The controls need the token (STUDIO_TOKEN) when one is set; without one, anyone who can reach the port can use them. Requests straight from a trusted
+// network (STUDIO_TRUST, such as 192.168.1.0/24) need no token; a request through a proxy never counts as trusted, since the proxy may be serving the internet.
 // What the runner was doing is kept in <data>/studio.json, so after a restart (a reboot, an update) it carries on, or stays paused.
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
@@ -49,6 +50,18 @@ export function campaignFile(a) {
   return { name, plan: { purpose: String(a.purpose ?? ""), about: String(a.about ?? ""), subset: a.subset, model: a.model, ...(a.dataset ? { dataset: a.dataset } : {}), ...(a.build ? { build: a.build } : {}), args: kv(a.options), trials, variants, createdAt: new Date().toISOString(), ...(a.from ? { from: a.from } : {}) } };
 }
 
+/** IPv4 ranges (a.b.c.d/n, comma separated) and whether an address is in one. IPv4 inside IPv6 (::ffff:a.b.c.d) counts as IPv4. */
+export function parseTrust(spec = "") {
+  return String(spec).split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
+    const [ip, bits = "32"] = s.split("/"), n = ipv4(ip), b = Number(bits);
+    if (n === null || !(b >= 0 && b <= 32)) throw new Error(`STUDIO_TRUST: not an IPv4 range: ${s}`);
+    const mask = b === 0 ? 0 : (~0 << (32 - b)) >>> 0; return { net: (n & mask) >>> 0, mask };
+  });
+}
+function ipv4(a) { const m = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/i.exec(String(a ?? "")); if (!m) return null; const p = m.slice(1).map(Number); return p.some((x) => x > 255) ? null : ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0; }
+export const trusted = (ranges, addr) => { const n = ipv4(addr); return n !== null && ranges.some((r) => ((n & r.mask) >>> 0) === r.net); };
+const viaProxy = (req) => !!(req.headers["x-forwarded-for"] || req.headers.forwarded || req.headers["x-real-ip"]);
+
 const buildSummary = (b) => (b ? { id: b.id, version: b.version, commit: b.commit, note: b.note, addedAt: b.addedAt, source: b.source, features: b.features ?? [] } : null);
 
 /** How the campaign runs: its purpose, the build, the options every variant shares, what each variant changes from the first, and where it runs. */
@@ -80,7 +93,8 @@ export function overview(name) {
   };
 }
 
-export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDIO_TOKEN || "", runner = new Runner(), resume = true } = {}) {
+export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDIO_TOKEN || "", trust = process.env.STUDIO_TRUST || "", runner = new Runner(), resume = true } = {}) {
+  const trustRanges = parseTrust(trust);
   const stateFile = join(paths.data, "studio.json");
   let quitting = false;
   const save = () => { if (quitting) return; try { mkdirSync(paths.data, { recursive: true }); writeFileSync(stateFile, JSON.stringify({ campaign: runner.campaign, want: ["running", "pausing"].includes(runner.status) ? (runner.status === "running" ? "running" : "paused") : runner.status })); } catch { /* read-only data folder */ } };
@@ -93,8 +107,9 @@ export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDI
   } catch { /* first start */ }
 
   const send = (res, code, body, type = "application/json") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
+  const fromTrusted = (req) => trustRanges.length > 0 && !viaProxy(req) && trusted(trustRanges, req.socket.remoteAddress);
   const allowed = (req) => {
-    if (!token) return true;
+    if (!token || fromTrusted(req)) return true;
     const got = Buffer.from(String(req.headers["x-studio-token"] ?? "")), want = Buffer.from(token);
     return got.length === want.length && timingSafeEqual(got, want);
   };
@@ -142,7 +157,7 @@ export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDI
         try { return send(res, 200, await control(await body(req))); } catch (e) { return send(res, 400, { error: e.message }); }
       }
       if (req.method !== "GET") return send(res, 405, { error: "GET only" });
-      if (p === "/api/state") return send(res, 200, state());
+      if (p === "/api/state") return send(res, 200, { ...state(), trusted: fromTrusted(req) });
       if (p === "/api/campaigns") return send(res, 200, listCampaigns().map((n) => {
         try {
           const c = loadCampaign(n), rs = results(c), cur = currentRun(c), s = campaignSetup(c, rs, cur), passed = rs.filter((r) => r.reward >= 1).length;
@@ -192,7 +207,7 @@ export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDI
       else if (!existsSync(f)) return send(res, 404, "not found", "text/plain");
       return send(res, 200, readFileSync(f), TYPES[extname(f)] ?? "application/octet-stream");
     } catch (e) { return send(res, 500, { error: e.message }); }
-  }).listen(port, host, () => console.log(`Amness Evaluation Studio: http://${host === "0.0.0.0" ? "<this machine>" : host}:${port}/${token ? " (controls need the token)" : " (controls open to anyone who can reach this port)"}`));
+  }).listen(port, host, () => console.log(`Amness Evaluation Studio: http://${host === "0.0.0.0" ? "<this machine>" : host}:${port}/${token ? ` (controls need the token${trustRanges.length ? ` except from ${trust}` : ""})` : " (controls open to anyone who can reach this port)"}`));
   server.runner = runner;
   /** For a restart (an update, a reboot): interrupt the run in progress (it runs again) but keep the saved state, so the next start carries on. */
   server.shutdown = async () => { quitting = true; runner.stopNow(); await runner.done(); server.close(); server.closeAllConnections?.(); };
