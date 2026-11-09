@@ -226,3 +226,43 @@ pre.ev { background: var(--card2); border: 1px solid var(--line); border-radius:
 .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .fchip { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line2); background: var(--card2); }
 .fchip.bug { color: var(--bad-ink); border-color: color-mix(in srgb, var(--bad) 45%, transparent); } .fchip.friction { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); } .fchip.model { color: var(--series-7); }
+
+/* Navigation, campaigns, builds, setup, campaign form */
+.nav { display: flex; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
+.nav button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; color: var(--mut); } .nav button.on { background: var(--card3); color: var(--fg); font-weight: 600; }
+h3 { font-size: 13px; margin: 16px 0 8px; } .link.big { font-size: 17px; font-weight: 700; color: var(--fg); }
+.purpose { font-size: 15px; margin: 4px 0 6px; padding-left: 10px; border-left: 3px solid var(--acc); }
+.bchip { display: inline-flex; gap: 2px; align-items: baseline; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 99px; background: color-mix(in srgb, var(--acc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--acc) 40%, transparent); }
+.bchip.bad { color: var(--bad-ink); border-color: color-mix(in srgb, var(--bad) 50%, transparent); background: none; }
+.clist { display: grid; gap: 10px; }
+.crow { display: flex; gap: 18px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--card); flex-wrap: wrap; }
+.crow-main { flex: 1; min-width: 280px; display: grid; gap: 4px; } .crow-title { display: flex; gap: 10px; align-items: center; }
+.crow-side { width: 240px; display: grid; gap: 4px; align-content: start; }
+.cprog { height: 8px; border-radius: 4px; background: var(--card3); overflow: hidden; } .cprog i { display: block; height: 100%; background: var(--acc); }
+.row-actions { display: flex; gap: 6px; margin-top: 4px; }
+table.builds tbody tr { cursor: pointer; } table.builds tbody tr:hover td, table.builds tr.open td { background: var(--card2); } table.builds tr.detail td { white-space: normal; cursor: default; }
+.bdetail { display: flex; gap: 24px; flex-wrap: wrap; padding: 6px 0; } .bdetail .grow { flex: 1; min-width: 260px; }
+ul.feat { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; }
+.npmlist { display: grid; gap: 4px; max-height: 420px; overflow: auto; }
+.npmrow { display: flex; gap: 10px; align-items: center; padding: 5px 8px; border-radius: 8px; background: var(--card2); }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; } .addrow input { flex: 1; min-width: 160px; }
+input:not([type=checkbox]), textarea { background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: 6px 9px; font: inherit; color: inherit; }
+textarea { resize: vertical; width: 100%; }
+.opts { display: grid; gap: 6px; } .optrow { display: flex; gap: 6px; align-items: flex-start; } .optrow > input:first-child { width: 170px; flex: none; } .optrow > input:nth-child(2), .optrow > select { flex: 1; min-width: 0; }
+.guards { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.guards label, .guards span { font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line2); display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.guards label input { display: none; } .guards label.on { background: color-mix(in srgb, var(--bad) 15%, transparent); border-color: color-mix(in srgb, var(--bad) 45%, transparent); color: var(--bad-ink); }
+.guards.ro span.on { color: var(--good-ink); } .guards.ro span.off { color: var(--bad-ink); border-color: color-mix(in srgb, var(--bad) 45%, transparent); } .guards.ro span { cursor: default; }
+.drawer.form { width: min(860px, 100vw); display: grid; gap: 8px; align-content: start; }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+.fgrid label { display: grid; gap: 4px; font-size: 12px; color: var(--mut); } .fgrid label.wide { grid-column: 1 / -1; } .fgrid input, .fgrid select, .fgrid textarea { color: var(--fg); font-size: 14px; }
+.vlist { display: grid; gap: 8px; } .vcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; background: var(--card); }
+.vhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .vhead .vname { width: 150px; font-weight: 600; } .vhead .grow { flex: 1; min-width: 140px; }
+.formfoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: sticky; bottom: -40px; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); margin-top: 8px; }
+.banner.inline { margin: 0; padding: 5px 10px; }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.sbox { background: var(--card2); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; align-content: start; } .sbox .l, .l2 { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; }
+.l2 { margin: 12px 0 6px; } .sbox details summary { cursor: pointer; color: var(--acc); }
+.kvchips { display: flex; flex-wrap: wrap; gap: 6px; } .kvchip { font-size: 12px; font-family: var(--mono); padding: 2px 8px; border-radius: 7px; background: var(--card2); border: 1px solid var(--line); margin-right: 4px; overflow-wrap: anywhere; }
+table.vtable td { white-space: normal; } .vtable { margin-top: 12px; }
+.rsetup { margin-top: 12px; } .eff { display: grid; gap: 8px; }

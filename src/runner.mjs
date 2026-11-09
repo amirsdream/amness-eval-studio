@@ -9,17 +9,19 @@ import { join, resolve } from "node:path";
 import { addResult, currentRun, loadCampaign, lock, paths, pending, results, setCurrent, unlock } from "./campaign.mjs";
 import { median } from "./stats.mjs";
 import { trialDir } from "./live.mjs";
+import { buildArgs, effectiveSettings, runSetup } from "./setup.mjs";
 
 export const fmt = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`);
 const adapters = resolve(new URL("../adapters/harbor", import.meta.url).pathname);
 
 /** One Harbor run of one task with one variant. Resolves with the result, or undefined when there is none (interrupted, or a setup failure). */
-function runOne(c, r, say, onChild) {
+async function runOne(c, r, say, onChild) {
   const job = `${c.name}-${r.variant}-${r.task}-t${r.trial}-${Date.now()}`;
   const args = ["run", "-d", c.plan.dataset ?? "terminal-bench@2.0", "-i", r.task, "-n", "1", "-a", c.plan.agent ?? "amness_agent:Amness", "-m", c.plan.model,
-    "-o", paths.jobs, "--job-name", job, ...(c.plan.args ?? []), ...c.plan.variants[r.variant]];
+    "-o", paths.jobs, "--job-name", job, ...buildArgs(c, r).args];
+  const setup = await runSetup(c, r, args).catch((e) => ({ error: e.message }));   // what, which version, how and where: recorded with the result
   const t0 = Date.now();
-  setCurrent(c, { ...r, job, started: new Date().toISOString(), limit: c.plan.limitSeconds ?? null });
+  setCurrent(c, { ...r, job, started: new Date().toISOString(), limit: c.plan.limitSeconds ?? null, setup });
   return new Promise((ok) => {
     const p = spawn(process.env.HARBOR ?? "harbor", args, { env: { ...process.env, PYTHONPATH: [adapters, process.env.PYTHONPATH].filter(Boolean).join(":") }, stdio: ["ignore", "ignore", "inherit"] });
     onChild(p);
@@ -32,7 +34,7 @@ function runOne(c, r, say, onChild) {
       if (d.exception_info?.exception_type === "CancelledError") { say("  cancelled (Harbor was stopped): not a result"); return ok(undefined); }
       if (d.exception_info && !d.agent_execution) { say(`  setup failed: ${d.exception_info.exception_type}: ${String(d.exception_info.exception_message ?? "").split("\n")[0].slice(0, 200)}`); return ok(undefined); }
       ok({ ...r, reward: d.verifier_result?.rewards?.reward ?? 0, exception: d.exception_info?.exception_type ?? null, tokensIn: a.n_input_tokens ?? null, tokensCached: a.n_cache_tokens ?? null,
-        tokensOut: a.n_output_tokens ?? null, cost: a.cost_usd ?? null, seconds: Math.round((Date.now() - t0) / 1000), job, at: new Date().toISOString() });
+        tokensOut: a.n_output_tokens ?? null, cost: a.cost_usd ?? null, seconds: Math.round((Date.now() - t0) / 1000), job, at: new Date().toISOString(), setup: { ...setup, effective: effectiveSettings(job) } });
     });
   });
 }

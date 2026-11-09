@@ -1,0 +1,45 @@
+{
+  "purpose": "Which of Amness's guards help a local model on Terminal-Bench? Switch each off in turn and compare with the full harness.",
+  "about": "The full harness, three guards switched off one at a time, and a tool call required at every step. Copy this file to campaigns/, or create a campaign in the browser.",
+  "subset": "mini",
+  "model": "custom/qwen-vllm",
+  "build": "latest",
+  "args": [
+    "--ak",
+    "endpoint=http://localhost:8000/v1",
+    "--ak",
+    "thinking_budget=4096"
+  ],
+  "trials": 1,
+  "variants": {
+    "full": [],
+    "no-pin": {
+      "args": [
+        "--ak",
+        "off=pin"
+      ],
+      "note": "pinned rules off"
+    },
+    "no-anchor": {
+      "args": [
+        "--ak",
+        "off=anchor"
+      ],
+      "note": "related files off"
+    },
+    "no-audit": {
+      "args": [
+        "--ak",
+        "off=audit"
+      ],
+      "note": "the finish audit off"
+    },
+    "tool-required": {
+      "args": [
+        "--ak",
+        "tool_choice=required"
+      ],
+      "note": "a tool call at every step"
+    }
+  }
+}

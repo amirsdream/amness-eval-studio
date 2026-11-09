@@ -10,12 +10,12 @@ const sh = (cmd, args, timeout = 30 * 60_000) => new Promise((ok) => execFile(cm
 const tasksDir = () => process.env.HARBOR_TASKS ?? join(homedir(), ".cache", "harbor", "tasks");
 
 /** task name -> its task.toml in Harbor's cache (content-addressed folders: <digest>/<task>/task.toml). */
-function cachedTasks() {
+export function cachedTasks() {
   const m = new Map(), d = tasksDir(); if (!existsSync(d)) return m;
   for (const digest of readdirSync(d)) { let names = []; try { names = readdirSync(join(d, digest)); } catch { continue; } for (const n of names) if (existsSync(join(d, digest, n, "task.toml"))) m.set(n, join(d, digest, n, "task.toml")); }
   return m;
 }
-const imageOf = (toml) => { try { return /^\s*docker_image\s*=\s*"([^"]+)"/m.exec(readFileSync(toml, "utf8"))?.[1] ?? null; } catch { return null; } };
+export const imageOf = (toml) => { try { return /^\s*docker_image\s*=\s*"([^"]+)"/m.exec(readFileSync(toml, "utf8"))?.[1] ?? null; } catch { return null; } };
 
 /** State of the warm-up, shown in the UI: one row per task (image name, ready or not). */
 export const warmth = { busy: false, campaign: null, tasks: [], message: "" };

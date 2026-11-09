@@ -133,3 +133,29 @@ test("harness checks: a guessed directory, a cut read, a re-read that adds nothi
   for (const id of ["cwd-guess", "read-cut", "reread-nothing-new", "batch-rejected", "claimed-done-failed"]) assert.ok(ids.includes(id), `${id} in ${ids}`);
   assert.equal(findings("job-3")[0].kind, "bug");
 });
+
+test("builds: a packed file becomes an unchanging build with a manifest; a campaign's build replaces its package option, and each run records its setup", async () => {
+  const { addBuild, resolveBuild, listBuilds, changelogSection, features } = await import("../src/builds.mjs");
+  const { buildArgs, agentOptions } = await import("../src/setup.mjs");
+  const { campaignSetup, campaignFile } = await import("../src/server.mjs");
+  const src = join(root, "pkg"); mkdirSync(join(src, "package"), { recursive: true }); writeFileSync(join(src, "package", "package.json"), JSON.stringify({ name: "amness", version: "9.9.9" }));
+  const { execFileSync } = await import("node:child_process"); execFileSync("tar", ["-czf", join(root, "a.tgz"), "-C", src, "package"]);
+  const m = await addBuild(join(root, "a.tgz"), { note: "dev" });
+  assert.match(m.id, /^amness-9\.9\.9-[0-9a-f]{8}$/); assert.equal((await addBuild(join(root, "a.tgz"))).id, m.id);                    // the same package twice: one build
+  assert.equal(resolveBuild("9.9.9").id, m.id); assert.equal(resolveBuild(m.id).id, m.id); assert.equal(listBuilds().length, 1);
+  assert.deepEqual(features(changelogSection("# C\n\n## 9.9.9 (x)\n\n- **Faster reads.** More.\n- Plain fix. Detail.\n\n## 9.9.8\n- old\n", "9.9.9")), ["Faster reads", "Plain fix"]);
+  writeFileSync(join(root, "campaigns", "vs.json"), JSON.stringify({ purpose: "Is 9.9.9 better?", subset: "two", model: "custom/m", build: "9.9.9", args: ["--ak", "endpoint=http://x/v1", "--ak", "package=/old.tgz"],
+    variants: { full: [], "no-pin": ["--ak", "off=pin"], old: { args: [], build: "9.9.9", note: "same build" } } }));
+  const c = loadCampaign("vs"), a = buildArgs(c, { task: "alpha", variant: "no-pin", trial: 1 }).args, o = agentOptions(a).opts;
+  assert.match(o.package, /builds\/amness-9\.9\.9-[0-9a-f]{8}\/package\.tgz$/); assert.equal(o.off, "pin"); assert.equal(a.filter((x) => /^package=/.test(x)).length, 1);
+  const s = campaignSetup(c, [], null);
+  assert.equal(s.purpose, "Is 9.9.9 better?"); assert.equal(s.build.version, "9.9.9"); assert.deepEqual(s.variants[1].changes, [{ option: "off", from: null, to: "pin" }]);
+  assert.throws(() => campaignFile({ name: "bad name!", subset: "two", model: "custom/m", variants: [{ name: "a" }] }), /name/);
+  const f = campaignFile({ name: "copy", purpose: "p", subset: "two", model: "custom/m", build: m.id, options: { endpoint: "http://x/v1", request: { temperature: 0.6 } }, variants: [{ name: "full", options: {} }, { name: "no-pin", options: { off: "pin" } }], trials: 2 });
+  assert.deepEqual(f.plan.args, ["--ak", "endpoint=http://x/v1", "--ak", 'request={"temperature":0.6}']); assert.deepEqual(f.plan.variants["no-pin"], { args: ["--ak", "off=pin"] }); assert.equal(f.plan.trials, 2);
+  // a run records what it was
+  writeFileSync(join(root, "mode"), "ok"); writeFileSync(join(root, "campaigns", "rec.json"), JSON.stringify({ subset: "two", model: "custom/m", build: "9.9.9", variants: { full: [] } }));
+  await run("rec", { minutes: 0, say: () => {} });
+  const row = results(loadCampaign("rec"))[0];
+  assert.equal(row.setup.build.version, "9.9.9"); assert.ok(row.setup.command.includes("--job-name")); assert.ok(row.setup.where.host); assert.equal(row.setup.options.package.endsWith("package.tgz"), true);
+});

@@ -1,4 +1,8 @@
-// A campaign: a fixed list of runs (task x variant x trial) for one agent and model, defined in campaigns/<name>.json.
+// A campaign: a fixed list of runs (task x variant x trial) for one agent and model, defined in campaigns/<name>.json:
+//   purpose   why it runs: the question it answers (shown first in the UI)
+//   about     what it compares, in a sentence
+//   build     the agent build every variant uses (an id, a version, or "latest"; see builds.mjs); a variant can name its own
+//   variants  { name: [harbor args] } or { name: { "args": [...], "build": "0.7.1", "note": "..." } }
 // Results are one JSON line per finished run in <data>/<name>/results.jsonl; the run in progress is <data>/<name>/current.json;
 // <data>/<name>/lock holds the process id of whatever is running the campaign.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync, appendFileSync, renameSync } from "node:fs";
@@ -23,9 +27,10 @@ export function loadCampaign(name) {
   const plan = JSON.parse(readFileSync(join(paths.campaigns, `${name}.json`), "utf8"));
   const tasks = readFileSync(join(paths.subsets, `${plan.subset}.txt`), "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
   const variants = Object.keys(plan.variants), runs = [];
+  const variant = (v) => { const x = plan.variants[v]; return Array.isArray(x) ? { args: x, build: plan.build ?? null, note: "" } : { args: x?.args ?? [], build: x?.build ?? plan.build ?? null, note: x?.note ?? "" }; };
   for (let trial = 1; trial <= (plan.trials ?? 1); trial++) for (const task of tasks) for (const variant of variants) runs.push({ task, variant, trial });
   const dir = join(paths.data, name); mkdirSync(dir, { recursive: true });
-  return { name, plan, tasks, variants, runs, dir, log: join(dir, "results.jsonl"), current: join(dir, "current.json") };
+  return { name, plan, tasks, variants, variant, runs, dir, log: join(dir, "results.jsonl"), current: join(dir, "current.json") };
 }
 
 export const runKey = (r) => `${r.task}|${r.variant}|${r.trial}`;

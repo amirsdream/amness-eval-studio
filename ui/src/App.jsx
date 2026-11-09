@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthError, ago, control, fmtDur, fmtInt, fmtNum, outcome, OUTCOME, pct, runKey, since, span, store, useNow, useStream, variantColor } from "./lib.js";
 import { Chat } from "./Chat.jsx";
 import { PromptBars, ProgressStrip, RateBar } from "./Charts.jsx";
+import { BuildChip, BuildsView, CampaignForm, CampaignsView, RunSetup, SetupCard } from "./Views.jsx";
 
 const PHASES = [["environment", "Container"], ["install", "Install"], ["agent", "Agent"], ["tests", "Tests"]];
 const PHASE_AT = { starting: 0, "setting up": 0, installing: 1, agent: 2, testing: 3, done: 4 };
@@ -21,6 +22,8 @@ export function App() {
   const [toasts, setToasts] = useState([]);
   const [askToken, setAskToken] = useState(null);
   const [hash, setHash] = useHash();
+  const [view, setView] = useState(new URLSearchParams(location.search).get("view") || "campaign");
+  const [form, setForm] = useState(null);
   const s = useStream(campaign);
   const ov = s.overview, st = s.state;
 
@@ -32,6 +35,7 @@ export function App() {
       setCampaign(want && list.some((c) => c.name === want) ? want : (list.find((c) => c.running) ?? list[0])?.name ?? "");
     }).catch(() => setCampaign(""));
   }, []);
+  useEffect(() => { refreshCampaigns(); const t = setInterval(refreshCampaigns, 15_000); return () => clearInterval(t); }, [ov?.done, view]);   // the picker's counts follow the runs
   useEffect(() => { if (ov) document.title = `${ov.done}/${ov.total} · ${ov.name} · Evaluation Studio`; }, [ov?.done, ov?.total, ov?.name]);
 
   // A toast for each run that finishes while the page is open.
@@ -48,7 +52,14 @@ export function App() {
     try { await control(action, { campaign: ov?.name, ...extra }); }
     catch (e) { if (e instanceof AuthError) setAskToken({ action, extra }); else toast(e.message, "error"); }
   }
-  const pick = (c) => { setCampaign(c); history.replaceState(null, "", `?campaign=${encodeURIComponent(c)}${location.hash}`); };
+  const pick = (c) => { setCampaign(c); setView("campaign"); history.replaceState(null, "", `?campaign=${encodeURIComponent(c)}${location.hash}`); };
+  const go = (v) => { setView(v); history.replaceState(null, "", v === "campaign" ? `?campaign=${encodeURIComponent(campaign ?? "")}` : `?view=${v}`); };
+  /** A control call for forms: asks for the token when needed, and gives the error back to the caller. */
+  async function call(action, extra = {}) {
+    try { return await control(action, extra); }
+    catch (e) { if (e instanceof AuthError) { setAskToken({ action, extra }); throw new Error("the studio token is needed: enter it and try again"); } throw e; }
+  }
+  const refreshCampaigns = () => fetch("/api/campaigns").then((r) => r.json()).then(setCampaigns).catch(() => {});
   const openRun = (r) => setHash(`run=${encodeURIComponent(r.job)}`);
   const openJob = /^#run=(.+)$/.exec(hash)?.[1];
 
@@ -59,16 +70,18 @@ export function App() {
         <select value={campaign ?? ""} onChange={(e) => pick(e.target.value)} aria-label="Campaign">
           {campaigns.map((c) => <option key={c.name} value={c.name}>{c.name}{c.total ? ` (${c.done}/${c.total})` : ""}</option>)}
         </select>
-        <Controls st={st} ov={ov} act={act} />
+        <nav className="nav">{[["campaign", "Campaign"], ["campaigns", "Campaigns"], ["builds", "Builds"]].map(([k, l]) => <button key={k} className={view === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}</nav>
+        {view === "campaign" && <Controls st={st} ov={ov} act={act} />}
         <span className="spacer" />
         <span className={`conn ${s.conn}`} title="Live connection to the studio">{s.conn === "live" ? "live" : s.conn}</span>
         <button className="icon" onClick={() => setTheme(theme === "auto" ? "dark" : theme === "dark" ? "light" : "auto")} title={`Theme: ${theme}`} aria-label="Switch theme">{theme === "light" ? "☀" : theme === "dark" ? "☾" : "◐"}</button>
       </header>
       {s.error && <div className="banner bad">{s.error}</div>}
       {campaign === "" && <div className="banner">No campaigns: add a file to <code>campaigns/</code>.</div>}
-      {ov ? (
+      {view === "campaigns" ? <CampaignsView open={pick} edit={setForm} /> : view === "builds" ? <BuildsView st={st} call={call} edit={setForm} /> : ov ? (
         <main>
           <Hero ov={ov} st={st} openRun={openRun} act={act} />
+          <SetupCard s={ov.setup} variants={ov.variants} edit={setForm} name={ov.name} />
           <div className="row">
             <Live live={s.live} ov={ov} st={st} act={act} />
             <aside className="side">
@@ -83,6 +96,7 @@ export function App() {
         </main>
       ) : campaign ? <main><div className="card skeleton">Connecting…</div></main> : null}
       {openJob && ov && <RunDrawer job={decodeURIComponent(openJob)} ov={ov} live={s.live} close={() => setHash("")} act={act} />}
+      {form && <CampaignForm init={form} close={() => setForm(null)} call={call} created={(n) => { setForm(null); refreshCampaigns().then(() => pick(n)); toast(`campaign ${n} created`, "pass"); }} />}
       {askToken && <TokenDialog close={() => setAskToken(null)} retry={() => { const a = askToken; setAskToken(null); act(a.action, a.extra); }} />}
       <div className="toasts" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}</div>
     </>
@@ -131,8 +145,9 @@ function Hero({ ov, st, openRun }) {
       <div className="hero-top">
         <div className="hero-name">
           <h1>{ov.name}</h1>
+          {ov.purpose && <p className="purpose">{ov.purpose}</p>}
           {ov.about && <p className="muted">{ov.about}</p>}
-          <div className="kv small"><span>model <b className="mono">{ov.model}</b></span><span>dataset <b>{ov.dataset}</b></span><span>{ov.tasks.length} tasks × {ov.variants.length} variants × {ov.trials} trial{ov.trials > 1 ? "s" : ""}</span></div>
+          <div className="kv small"><span>version <BuildChip b={ov.setup?.build} /></span><span>model <b className="mono">{ov.model}</b></span><span>dataset <b>{ov.dataset}</b></span><span>{ov.tasks.length} tasks × {ov.variants.length} variants × {ov.trials} trial{ov.trials > 1 ? "s" : ""}</span></div>
         </div>
         <div className="hero-stats">
           <Stat v={<>{ov.done}<span className="muted">/{ov.total}</span></>} l="runs done" />
@@ -401,10 +416,11 @@ function RunDrawer({ job, ov, live, close, act }) {
           {v.exception && <div className="banner bad"><b>{v.exception.type}</b> {v.exception.message}</div>}
           <PromptBars requests={v.usage?.perRequest} />
           <div className="tabs" role="tablist">
-            {[["chat", `Conversation${v.count ? ` (${v.count})` : ""}`], ["checks", `Checks${v.findings?.length ? ` (${v.findings.length})` : ""}`], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+            {[["chat", `Conversation${v.count ? ` (${v.count})` : ""}`], ["checks", `Checks${v.findings?.length ? ` (${v.findings.length})` : ""}`], ["setup", "Setup"], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
           </div>
           {tab === "chat" && <Chat items={v.items} live={isLive} />}
           {tab === "checks" && <FindingList list={v.findings} />}
+          {tab === "setup" && <RunSetup setup={isLive ? ov.current?.setup : d?.setup} />}
           {tab === "tests" && (v.tests ? <pre className="out">{v.tests}</pre> : <div className="empty">No test output.</div>)}
           {tab === "stderr" && (v.stderr ? <pre className="out">{v.stderr}</pre> : <div className="empty">Nothing on the agent's error output.</div>)}
         </>}
