@@ -19,7 +19,9 @@ const useJson = (url, every = 0, dep = null) => {
 };
 
 export const BuildChip = ({ b }) => (!b ? <span className="muted">no build recorded</span> : b.missing ? <span className="bchip bad" title="not in the studio">{b.id} (missing)</span> : b.package ? <span className="bchip" title={b.package}>package file</span>
-  : <span className="bchip" title={`${b.id}${b.commit ? `\ncommit ${b.commit}` : ""}${b.note ? `\n${b.note}` : ""}`}>v{b.version}{b.commit ? <span className="muted"> · {short(b.commit)}</span> : null}{b.note ? <span className="muted"> · {b.note}</span> : null}</span>);
+  : <span className="bchip" title={`${b.id}${b.commit ? `\ncommit ${b.commit}` : ""}${b.note ? `\n${b.note}` : ""}`}>v{b.version}{b.commit ? <span className="muted"> · {short(b.commit)}</span> : null}{noteOf(b) ? <span className="muted"> · {noteOf(b)}</span> : null}</span>);
+/** A build's note without a repeat of its version ("v0.7.2 release tarball" on v0.7.2 reads "release tarball"). */
+const noteOf = (b) => (b.note ?? "").replace(new RegExp(`^v?${String(b.version).replace(/\./g, "\\.")}\\s*`), "");
 
 /** Every campaign: why it runs, which version, which model where, how far, how well. */
 export function CampaignsView({ open, edit }) {
@@ -232,7 +234,7 @@ export function SetupCard({ s, variants, edit, name }) {
           <thead><tr><th>Variant</th><th>Version</th><th>Changes from {s.variants[0]?.name}</th><th>Note</th></tr></thead>
           <tbody>{s.variants.map((v, i) => (
             <tr key={v.name}><td><span className="dotc" style={{ background: variantColor(variants, v.name) }} /> <b>{v.name}</b></td><td><BuildChip b={v.build} /></td>
-              <td>{i === 0 ? <span className="muted">baseline</span> : v.changes.length ? v.changes.map((c) => <span key={c.option} className="kvchip"><span className="muted">{c.option}</span> {c.from ?? "–"} → <b>{c.to ?? "(removed)"}</b></span>) : <span className="muted">same as the baseline</span>}</td>
+              <td>{i === 0 ? <span className="muted">baseline</span> : v.changes.length ? v.changes.map((c) => <span key={c.option} className="kvchip"><span className="muted">{c.option}</span> {c.from === null ? <b>{c.to}</b> : <>{c.from} → <b>{c.to ?? "(removed)"}</b></>}</span>) : <span className="muted">same as the baseline</span>}</td>
               <td className="muted small">{v.note}</td></tr>
           ))}</tbody>
         </table></div>
