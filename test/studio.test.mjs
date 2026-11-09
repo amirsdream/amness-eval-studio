@@ -58,6 +58,7 @@ test("runner: saves each result, redoes a setup failure (agent never ran) withou
   const fake = join(root, "fake-harbor.mjs"), mode = join(root, "mode");
   writeFileSync(fake, `#!/usr/bin/env node
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs"; import { join } from "node:path";
+if (process.argv[2] === "--version") { console.log("0.0-test"); process.exit(0); }
 const a = process.argv.slice(2), o = a[a.indexOf("-o") + 1], job = a[a.indexOf("--job-name") + 1], task = a[a.indexOf("-i") + 1], t = join(o, job, task + "__x"); mkdirSync(t, { recursive: true });
 const m = readFileSync(${JSON.stringify(mode)}, "utf8").trim();
 if (m === "slow") { process.on("SIGINT", () => process.exit(130)); await new Promise((ok) => setTimeout(ok, 400)); }
