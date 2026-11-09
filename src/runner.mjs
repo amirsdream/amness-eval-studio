@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import { addResult, currentRun, loadCampaign, lock, paths, pending, results, setCurrent, unlock } from "./campaign.mjs";
 import { median } from "./stats.mjs";
 import { trialDir } from "./live.mjs";
-import { buildArgs, effectiveSettings, runSetup } from "./setup.mjs";
+import { buildArgs, effectiveSettings, runSetup, runtimeMount } from "./setup.mjs";
 
 export const fmt = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`);
 const adapters = resolve(new URL("../adapters/harbor", import.meta.url).pathname);
@@ -19,6 +19,7 @@ async function runOne(c, r, say, onChild) {
   const job = `${c.name}-${r.variant}-${r.task}-t${r.trial}-${Date.now()}`;
   const args = ["run", "-d", c.plan.dataset ?? "terminal-bench@2.0", "-i", r.task, "-n", "1", "-a", c.plan.agent ?? "amness_agent:Amness", "-m", c.plan.model,
     "-o", paths.jobs, "--job-name", job, ...buildArgs(c, r).args];
+  args.push(...await runtimeMount(c, args, say));
   const setup = await runSetup(c, r, args).catch((e) => ({ error: e.message }));   // what, which version, how and where: recorded with the result
   const t0 = Date.now();
   setCurrent(c, { ...r, job, started: new Date().toISOString(), limit: c.plan.limitSeconds ?? null, setup });

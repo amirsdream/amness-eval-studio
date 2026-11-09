@@ -92,7 +92,7 @@ A run where Harbor failed before the agent started, or that was cancelled, is no
 
 ## Faster runs
 
-- **The agent's install:** the Harbor adapter installs Node and Amness once on the host into a cached bundle; each container unpacks it in seconds, with no network (`--ak runtime=off` for the old way).
+- **The agent's install:** each build is unpacked once on the studio's machine (Node and the agent, about 7 s) and mounted read-only into every task container, so the agent's install takes about a second (it took 5 to 19 s). The task images are used as published: nothing is installed into them, not even git (Amness needs it only for undo snapshots and worktrees, which benchmark runs do not use). Without the studio, the adapter uploads and unpacks the bundle instead; `--ak runtime=off` installs with nvm and npm as before.
 - **Task images:** when a campaign starts, the studio downloads its tasks and pulls the images that are not here yet, in campaign order.
 
 ## Install and run

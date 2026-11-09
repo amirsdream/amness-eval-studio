@@ -3,7 +3,7 @@
 // (Amness 0.7.3+: the first `config` event of `amness run --json`) is added. Together they answer: what was tested, with which version, how, and where.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, openSync, readSync, closeSync } from "node:fs";
+import { existsSync, openSync, readSync, closeSync, readFileSync } from "node:fs";
 import { cpus, hostname, totalmem } from "node:os";
 import { join } from "node:path";
 import { buildPackage, resolveBuild } from "./builds.mjs";
@@ -61,6 +61,29 @@ export function buildArgs(c, r) {
   if (!b) throw new Error(`build ${v.build} is not in the studio: add it with \`studio build add\``);
   const drop = (a) => { const o = []; for (let i = 0; i < a.length; i++) { if ((a[i] === "--ak" || a[i] === "--agent-kwarg") && /^package=/.test(a[i + 1] ?? "")) { i++; continue; } o.push(a[i]); } return o; };
   return { args: [...drop(c.plan.args ?? []), ...drop(v.args), "--ak", `package=${buildPackage(b.id)}`] };
+}
+
+// The agent's runtime (Node and the build), unpacked once on this machine and mounted read-only into every task container: the agent's install
+// then takes about a second, and a new build is a new folder. The Harbor adapter does the unpacking (`amness_agent.py prepare`), with Harbor's own Python.
+const ADAPTER = new URL("../adapters/harbor/amness_agent.py", import.meta.url).pathname, prepared = new Map();
+async function harborPython() {
+  if (process.env.HARBOR_PYTHON) return process.env.HARBOR_PYTHON;
+  const bin = await out("sh", ["-c", `command -v ${process.env.HARBOR ?? "harbor"}`]); if (!bin) return null;
+  try { const first = readFileSync(bin, "utf8").split("\n")[0]; return first.startsWith("#!") && /python/.test(first) ? first.slice(2).trim().split(" ")[0] : null; } catch { return null; }
+}
+/** `--mounts` for the run, or nothing when the agent, the options or this machine do not allow it (the adapter then uploads the bundle as before). */
+export async function runtimeMount(c, harborArgs, say = () => {}) {
+  const { opts } = agentOptions(harborArgs);
+  if (process.env.STUDIO_MOUNT === "0" || harborArgs.includes("--mounts") || !/amness_agent/.test(c.plan.agent ?? "amness_agent:Amness")) return [];
+  if (["off", "upload"].includes(opts.runtime) || !/\.tgz$/.test(opts.package ?? "")) return [];
+  let dir = prepared.get(opts.package);
+  if (!dir) {
+    const py = await harborPython(); if (!py) return [];
+    dir = await out(py, [ADAPTER, "prepare", opts.package], 15 * 60_000);
+    if (!dir || !existsSync(dir)) { say("  could not prepare the agent's runtime to mount: the adapter uploads it instead"); return []; }
+    dir = dir.split("\n").pop(); prepared.set(opts.package, dir);
+  }
+  return ["--mounts", JSON.stringify([{ type: "bind", source: dir, target: "/opt/amness-rt", read_only: true }])];
 }
 
 /** The agent's report of its effective settings (the first `config` event of its log), when its version sends one. */

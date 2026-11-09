@@ -11,8 +11,12 @@ Options (`--ak name=value`): package (`local` = pack this working tree, default;
 endpoint (the server's base URL; Harbor reserves `base_url` for its own credential handling), off (guards to switch off, comma separated), plugin (plugin files on the host, comma separated),
 effort, max_steps, max_tokens, context_window, api, verify, tool_choice (auto or required), max_time (seconds; default: the task's limit minus a margin),
 thinking_budget (most thinking tokens per model request, for llama.cpp; Amness 0.7.2+), keep_thinking (true: send the model's earlier thinking back; Amness 0.7.4+), request (a JSON object of extra request fields, such as {"temperature":0.6}; Amness 0.7.2+),
-runtime (`cache`, default: Node and Amness are installed once on the host into a cached bundle that each container unpacks, with no network; `off`: install them in
-every container with nvm and npm, as before). The bundle is rebuilt when the package changes; a container where it does not work (no glibc, another CPU) falls back.
+runtime (`cache`, default: Node and Amness are installed once on the host into a cached bundle; when that bundle is mounted at /opt/amness-rt (the studio passes
+`--mounts`, see `prepare` below) the container uses it as it is, otherwise it uploads and unpacks it, with no network either way; `off`: install them in every
+container with nvm and npm, as before). The bundle is rebuilt when the package changes; a container where it does not work (no glibc, another CPU) falls back.
+No git is installed: Amness needs it only for undo snapshots and worktrees, which benchmark runs do not use, and the task's environment stays as published.
+
+    python amness_agent.py prepare <package.tgz>   unpack the package's bundle on the host once and print the folder to mount at /opt/amness-rt
 """
 
 import fcntl
@@ -110,6 +114,26 @@ def _runtime(package: Path) -> Path:
     return out
 
 
+def _runtime_dir(package: Path) -> Path:
+    """The bundle of `package` unpacked on the host (once), to mount read-only at /opt/amness-rt in every container."""
+    bundle = _runtime(package)
+    out = CACHE / bundle.name.replace("runtime-", "rt-").replace(".tgz", "")
+    if out.exists():
+        return out
+    part = Path(tempfile.mkdtemp(prefix="rt-", dir=CACHE))
+    try:
+        with tarfile.open(bundle) as t:
+            t.extractall(part, filter="tar")
+        for p in [part, *part.rglob("*")]:   # readable (and, where executable, runnable) by the container's agent user
+            if p.is_symlink():
+                continue
+            p.chmod(p.stat().st_mode | 0o444 | (0o111 if p.is_dir() or p.stat().st_mode & 0o100 else 0))
+        part.rename(out)
+    except FileExistsError:
+        shutil.rmtree(part, ignore_errors=True)   # another run unpacked it first
+    return out
+
+
 class Amness(BaseInstalledAgent):
     """Amness (https://github.com/amirsdream/Amness): a hackable coding-agent harness."""
 
@@ -164,12 +188,13 @@ class Amness(BaseInstalledAgent):
             await environment.upload_file(Path(p).expanduser().resolve(), f"/tmp/amness-plugin-{i}{Path(p).suffix}")
 
     async def _install_cached(self, environment: BaseEnvironment) -> bool:
-        """Unpack the cached bundle: a few seconds, no network. False when it cannot be used here, so `install` takes the slow path."""
+        """Use the bundle mounted at /opt/amness-rt (about a second), or upload and unpack it (a few seconds); no network. False when it cannot be used here."""
         try:
-            pkg = _pack() if self.package == "local" else Path(self.package).expanduser().resolve()
-            await environment.upload_file(_runtime(pkg), "/tmp/amness-rt.tgz")
-            await self.exec_as_root(environment, command=f"mkdir -p {RT} && tar -xzf /tmp/amness-rt.tgz -C {RT} && chmod -R a+rX {RT} && rm -f /tmp/amness-rt.tgz && {RT}/node/bin/node -e 0")
-            await self.ensure_system_dependencies(environment, ("git",))
+            mounted = (await environment.exec(command=f"test -x {RT}/node/bin/node && test -e {RT}/bin/amness", user="root")).return_code == 0
+            if not mounted:
+                pkg = _pack() if self.package == "local" else Path(self.package).expanduser().resolve()
+                await environment.upload_file(_runtime(pkg), "/tmp/amness-rt.tgz")
+                await self.exec_as_root(environment, command=f"mkdir -p {RT} && tar -xzf /tmp/amness-rt.tgz -C {RT} && chmod -R a+rX {RT} && rm -f /tmp/amness-rt.tgz && {RT}/node/bin/node -e 0")
             await self.exec_as_agent(environment, command=f"{NODE}; amness --version")
         except Exception as e:   # noqa: BLE001: any failure means "use the slow path"
             self.logger.warning(f"cached runtime not usable here, installing with nvm and npm: {e}")
@@ -232,3 +257,12 @@ class Amness(BaseInstalledAgent):
         context.n_output_tokens = usage.get("completion")
         if result and result.get("cost") is not None:
             context.cost_usd = result["cost"]
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == "prepare":
+        print(_runtime_dir(_pack() if sys.argv[2] == "local" else Path(sys.argv[2]).expanduser().resolve()))
+    else:
+        print("usage: python amness_agent.py prepare <package.tgz | local>", file=sys.stderr)
+        sys.exit(2)
