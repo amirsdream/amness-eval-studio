@@ -116,3 +116,20 @@ test("live view: while Harbor has not copied the log out yet, the studio's own c
   const v = jobView("job-2");
   assert.deepEqual(v.items.map((i) => i.t), ["user", "end"]); assert.equal(v.phase, "testing"); assert.equal(v.stderr, "warn");
 });
+
+test("harness checks: a guessed directory, a cut read, a re-read that adds nothing, a refused batch and a claimed-but-failed finish are found", async () => {
+  const { findings } = await import("../src/findings.mjs");
+  const t = join(root, "data", "jobs", "job-3", "gamma__q"); mkdirSync(join(t, "agent"), { recursive: true });
+  const tool = (id, name, args, result) => [{ kind: "toolstart", id, name, args: JSON.stringify(args) }, { kind: "tool", id, name, args: JSON.stringify(args), result }];
+  const ev = [{ kind: "run", messages: [{ role: "user", content: "go" }] }, { kind: "phase", phase: "model", step: 0, max: 40 },
+    ...tool("a", "sh", { cmd: "cd /home/user && ls" }, "exit=1\nbash: line 1: cd: /home/user: No such file or directory"),
+    ...tool("b", "read_file", { path: "s.txt" }, "1\ta\n...[2139 chars cut; to see the rest read a smaller part: read_file start/end, or grep]...\n110\tz"),
+    ...tool("c", "read_file", { path: "s.txt", start: 1, end: 110 }, "(lines 1-43 unchanged: already above in the output of call b)\n...[2139 chars cut; x]...\n(lines 80-110 unchanged: already above in the output of call b)"),
+    ...tool("d", "edit_file", { path: "s.txt" }, "ERROR: edit 12 of 15: `old` matched 2 times; it must match exactly once."),
+    { kind: "finish", summary: "all done" }, { kind: "result", finished: true, text: "all done" }];
+  writeFileSync(join(t, "agent", "amness.jsonl"), ev.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  writeFileSync(join(t, "result.json"), JSON.stringify({ finished_at: "x", verifier_result: { rewards: { reward: 0 } } }));
+  const ids = findings("job-3").map((f) => f.id);
+  for (const id of ["cwd-guess", "read-cut", "reread-nothing-new", "batch-rejected", "claimed-done-failed"]) assert.ok(ids.includes(id), `${id} in ${ids}`);
+  assert.equal(findings("job-3")[0].kind, "bug");
+});

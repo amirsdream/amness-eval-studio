@@ -11,6 +11,7 @@ import { forget, jobView, mirror } from "./live.mjs";
 import { median, summarize } from "./stats.mjs";
 import { Runner } from "./runner.mjs";
 import { warm, warmth } from "./cache.mjs";
+import { campaignFindings, findings } from "./findings.mjs";
 
 const UI = resolve(new URL("../ui/dist", import.meta.url).pathname);
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json" };
@@ -21,7 +22,7 @@ export function overview(name) {
   return {
     name, about: c.plan.about ?? "", model: c.plan.model, dataset: c.plan.dataset ?? "terminal-bench@2.0", tasks: c.tasks, variants: c.variants, total: c.runs.length, trials: c.plan.trials ?? 1,
     done: rs.length, left: left.length, etaSeconds: left.length * per, perRunSeconds: per, next: left[0] ?? null, upcoming: left.filter((r) => !cur || runKey(r) !== runKey(cur)).slice(0, 6),
-    summary: summarize(rs, c.variants), results: rs, current: cur ? { ...jobView(cur.job, -1), ...cur } : null,   // the plan's task and variant win over what the job folder knows so far
+    summary: summarize(rs, c.variants), checks: campaignFindings(rs), results: rs, current: cur ? { ...jobView(cur.job, -1), ...cur } : null,   // the plan's task and variant win over what the job folder knows so far
   };
 }
 
@@ -72,7 +73,7 @@ export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDI
       if (p === "/api/state") return send(res, 200, state());
       if (p === "/api/campaigns") return send(res, 200, listCampaigns().map((n) => { try { const o = overview(n); return { name: n, done: o.done, total: o.total, running: !!o.current, about: o.about }; } catch (e) { return { name: n, error: e.message }; } }));
       if (p.startsWith("/api/campaign/")) return send(res, 200, overview(decodeURIComponent(p.slice(14))));
-      if (p.startsWith("/api/job/")) return send(res, 200, jobView(decodeURIComponent(p.slice(9)), Number(u.searchParams.get("since") ?? 0)));
+      if (p.startsWith("/api/job/")) { const job = decodeURIComponent(p.slice(9)), v = jobView(job, Number(u.searchParams.get("since") ?? 0)); return send(res, 200, { ...v, findings: findings(job) }); }
       if (p === "/api/stream") {
         // Live, once a second: the runner's state; the campaign when it changed; the running job's status and its new conversation items.
         const name = u.searchParams.get("campaign") || runner.campaign || listCampaigns()[0];
@@ -85,7 +86,7 @@ export function serve({ port = 8090, host = "0.0.0.0", token = process.env.STUDI
             const st = JSON.stringify(state()); if (st !== lastState) { msg.state = JSON.parse(st); lastState = st; }
             if ((o.current?.job ?? null) !== job) { job = o.current?.job ?? null; since = 0; msg.reset = true; }
             if (job) mirror(job);                                                // the agent's log, from inside the container, for the next tick
-            if (job) { const v = jobView(job, since); since = v.seq; msg.live = { ...v, task: o.current.task, variant: o.current.variant, trial: o.current.trial, startedAt: o.current.started }; }
+            if (job) { const v = jobView(job, since); since = v.seq; msg.live = { ...v, findings: findings(job), task: o.current.task, variant: o.current.variant, trial: o.current.trial, startedAt: o.current.started }; }
             res.write(`data: ${JSON.stringify(msg)}\n\n`);
           } catch (e) { res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`); }
         };

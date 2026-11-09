@@ -77,6 +77,7 @@ export function App() {
             </aside>
           </div>
           <Scoreboard ov={ov} />
+          <Checks ov={ov} openRun={openRun} />
           <Matrix ov={ov} openRun={openRun} />
           <History ov={ov} openRun={openRun} />
         </main>
@@ -202,10 +203,12 @@ function Live({ live, ov, st, act }) {
         <Tile v={fmtNum(u?.completion)} l="received" sub={u?.reasoning ? `${fmtNum(u.reasoning)} thinking` : null} />
       </div>
       <PromptBars requests={u?.perRequest} />
+      <FindingChips list={live.findings} />
       <div className="tabs" role="tablist">
-        {[["chat", `Conversation${live.count ? ` (${live.count})` : ""}`], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+        {[["chat", `Conversation${live.count ? ` (${live.count})` : ""}`], ["checks", `Checks${live.findings?.length ? ` (${live.findings.length})` : ""}`], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === "chat" && <Chat items={live.items} live height="620px" />}
+      {tab === "checks" && <FindingList list={live.findings} />}
       {tab === "tests" && (live.tests ? <pre className="out">{live.tests}</pre> : <div className="empty">The tests run after the agent finishes.</div>)}
       {tab === "stderr" && (live.stderr ? <pre className="out">{live.stderr}</pre> : <div className="empty">Nothing on the agent's error output.</div>)}
     </section>
@@ -254,6 +257,53 @@ function Scoreboard({ ov }) {
         </table>
       </div>
     </section>
+  );
+}
+
+const KIND = { bug: ["bug", "Harness bug"], friction: ["friction", "Harness friction"], model: ["model", "Model behaviour"], info: ["info", "Info"] };
+const Kind = ({ k }) => <span className={`kind ${k}`}>{KIND[k]?.[1] ?? k}</span>;
+
+/** The harness checks that fired in the finished runs: feedback on the agent's harness, not only on the model. */
+function Checks({ ov, openRun }) {
+  const [open, setOpen] = useState(null);
+  const list = ov.checks ?? [], n = ov.results.length;
+  return (
+    <section className="card">
+      <h2>Harness checks <span className="muted small normal">what the runs say about the harness itself; each check fires on a pattern in a run's conversation</span></h2>
+      {!list.length ? <div className="empty">{n ? "Nothing fired in the finished runs." : "No finished runs yet."}</div> : (
+        <div className="checks">{list.map((c) => (
+          <div key={c.id} className={`check ${c.kind}`}>
+            <button className="check-head" onClick={() => setOpen(open === c.id ? null : c.id)} aria-expanded={open === c.id}>
+              <Kind k={c.kind} /><span className="check-title">{c.title}</span>
+              <span className="check-bar" title={`${c.runs.length} of ${n} runs`}><i style={{ width: `${(c.runs.length / Math.max(1, n)) * 100}%` }} /></span>
+              <span className="muted small">{c.runs.length} of {n} runs{c.count > c.runs.length ? ` · ${c.count}×` : ""}</span><span className="chev">{open === c.id ? "▾" : "▸"}</span>
+            </button>
+            {open === c.id && <div className="check-body">
+              <p className="muted">{c.why}</p>
+              {c.example && <pre className="ev">{c.example.step ? `step ${c.example.step}: ` : ""}{c.example.text}</pre>}
+              <div className="runs">{c.runs.map((r) => <button key={r.job} className={`runchip ${r.passed ? "pass" : "fail"}`} onClick={() => openRun(r)}>{r.passed ? "✓" : "✕"} {r.task} · {r.variant}{ov.trials > 1 ? ` · t${r.trial}` : ""}{r.count > 1 ? ` ×${r.count}` : ""}</button>)}</div>
+            </div>}
+          </div>
+        ))}</div>
+      )}
+    </section>
+  );
+}
+
+function FindingChips({ list }) {
+  if (!list?.length) return null;
+  return <div className="fchips">{list.filter((f) => f.kind !== "info").map((f) => <span key={f.id} className={`fchip ${f.kind}`} title={f.why}>{f.kind === "bug" ? "✱" : f.kind === "friction" ? "⚠" : "◆"} {f.title}{f.count > 1 ? ` ×${f.count}` : ""}</span>)}</div>;
+}
+
+function FindingList({ list }) {
+  if (!list?.length) return <div className="empty">No check fired on this run.</div>;
+  return (
+    <div className="flist">{list.map((f) => (
+      <div key={f.id} className={`check ${f.kind}`}>
+        <div className="check-head static"><Kind k={f.kind} /><span className="check-title">{f.title}</span><span className="muted small">{f.count}×</span></div>
+        <div className="check-body"><p className="muted">{f.why}</p>{f.evidence.map((e, i) => <pre key={i} className="ev">{e.step ? `step ${e.step}: ` : ""}{e.text}</pre>)}</div>
+      </div>
+    ))}</div>
   );
 }
 
@@ -351,9 +401,10 @@ function RunDrawer({ job, ov, live, close, act }) {
           {v.exception && <div className="banner bad"><b>{v.exception.type}</b> {v.exception.message}</div>}
           <PromptBars requests={v.usage?.perRequest} />
           <div className="tabs" role="tablist">
-            {[["chat", `Conversation${v.count ? ` (${v.count})` : ""}`], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+            {[["chat", `Conversation${v.count ? ` (${v.count})` : ""}`], ["checks", `Checks${v.findings?.length ? ` (${v.findings.length})` : ""}`], ["tests", "Tests"], ["stderr", "Agent log"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
           </div>
           {tab === "chat" && <Chat items={v.items} live={isLive} />}
+          {tab === "checks" && <FindingList list={v.findings} />}
           {tab === "tests" && (v.tests ? <pre className="out">{v.tests}</pre> : <div className="empty">No test output.</div>)}
           {tab === "stderr" && (v.stderr ? <pre className="out">{v.stderr}</pre> : <div className="empty">Nothing on the agent's error output.</div>)}
         </>}

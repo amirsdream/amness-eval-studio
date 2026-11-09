@@ -10,6 +10,7 @@ Keys come from the host's environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, or AMN
 Options (`--ak name=value`): package (`local` = pack this working tree, default; a path to a packed .tgz, for a machine without the repository; or an npm version such as 0.5.2),
 endpoint (the server's base URL; Harbor reserves `base_url` for its own credential handling), off (guards to switch off, comma separated), plugin (plugin files on the host, comma separated),
 effort, max_steps, max_tokens, context_window, api, verify, tool_choice (auto or required), max_time (seconds; default: the task's limit minus a margin),
+thinking_budget (most thinking tokens per model request, for llama.cpp; Amness 0.7.2+), request (a JSON object of extra request fields, such as {"temperature":0.6}; Amness 0.7.2+),
 runtime (`cache`, default: Node and Amness are installed once on the host into a cached bundle that each container unpacks, with no network; `off`: install them in
 every container with nvm and npm, as before). The bundle is rebuilt when the package changes; a container where it does not work (no glibc, another CPU) falls back.
 """
@@ -114,11 +115,13 @@ class Amness(BaseInstalledAgent):
 
     def __init__(self, *args, package: str = "local", endpoint: str | None = None, off: str | None = None, plugin: str | None = None,
                  effort: str | None = None, max_steps: int | None = None, max_tokens: int | None = None, context_window: int | None = None,
-                 api: str | None = None, verify: str | None = None, max_time: int | None = None, tool_choice: str | None = None, runtime: str = "cache", **kwargs):
+                 api: str | None = None, verify: str | None = None, max_time: int | None = None, tool_choice: str | None = None, runtime: str = "cache",
+                 thinking_budget: int | None = None, request: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.package, self.endpoint, self.off, self.plugins = package, endpoint, off, [p for p in (plugin or "").split(",") if p]
         self.max_time, self.runtime = max_time, runtime
-        self.flags = {"--effort": effort, "--max-steps": max_steps, "--max-tokens": max_tokens, "--context-window": context_window, "--api": api, "--verify": verify, "--tool-choice": tool_choice}
+        self.flags = {"--effort": effort, "--max-steps": max_steps, "--max-tokens": max_tokens, "--context-window": context_window, "--api": api, "--verify": verify, "--tool-choice": tool_choice,
+                      "--thinking-budget": thinking_budget, "--request": request}
 
     def _task_timeout(self) -> float | None:
         """The task's agent time limit (task.toml `agent.timeout_sec` x the trial's multiplier), read from the trial's config and Harbor's task cache."""
@@ -195,7 +198,7 @@ class Amness(BaseInstalledAgent):
             args += ["--max-time", str(limit)]
         for flag, value in self.flags.items():
             if value not in (None, ""):
-                args += [flag, str(value)]
+                args += [flag, json.dumps(value) if isinstance(value, (dict, list)) else str(value)]   # Harbor may hand `--ak request={...}` over already parsed
         cmd = (f"{NODE}; mkdir -p /logs/agent; printf '%s' \"$AMNESS_TASK\" | amness {' '.join(shlex.quote(a) for a in args)} - "
                "> /logs/agent/amness.jsonl 2> /logs/agent/amness.stderr; echo $? > /logs/agent/amness.exit; exit 0")   # exit 1 = not finished: the verifier decides, so the trial goes on
         await self.exec_as_agent(environment, command=cmd, env=env)
