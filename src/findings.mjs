@@ -14,6 +14,7 @@ export const CHECKS = {
   "batch-rejected": { kind: "friction", title: "A whole edit batch was refused", why: "One edit of a multi-edit call did not match, so none were applied; the model has to redo all of them." },
   "patch-mismatch": { kind: "friction", title: "A patch did not apply", why: "apply_patch could not find the lines to replace. Does the error name the line that differs?" },
   "long-thinking": { kind: "model", title: "Very long thinking in one request", why: "The model thought for more than ~6,000 tokens in one request. On a slow server that is minutes: consider a thinking budget." },
+  "think-no-act": { kind: "friction", title: "Long thinking again and again, no edit", why: "The model thought at length on several steps but changed nothing: it may be working out the same analysis again each time (is its earlier thinking kept?)." },
   "time-out-thinking": { kind: "friction", title: "Time ran out while the model was thinking", why: "The run hit its time limit in the middle of a model request: the work of that request is lost, and its tokens are not counted." },
   "timeout": { kind: "info", title: "Stopped at the time limit", why: "The run ended because its time was up." },
   "claimed-done-failed": { kind: "model", title: "Finished, but the tests failed", why: "The agent called finish, yet the task's tests failed: the harness's checks before finishing did not catch it." },
@@ -52,6 +53,8 @@ export function findings(job, view = null) {
       else if (!/escapes the workspace/.test(r)) add("tool-error", `${it.name}: ${r}`, step);
     }
   }
+  const longThinks = items.filter((x) => x.t === "thinking" && x.text.length > 12_000).length, edits = items.filter((x) => x.t === "edit").length;
+  if (longThinks >= 3 && edits === 0) add("think-no-act", `${longThinks} requests with more than ~3,000 tokens of thinking each, and no file changed`);
   const end = items.find((x) => x.t === "end"), lastModelItem = [...items].reverse().find((x) => x.t !== "end" && x.t !== "guard");
   if (end && end.stopped === "time") { add("timeout", end.text); if (lastModelItem?.t === "thinking" || lastModelItem?.t === "step") add("time-out-thinking", `the last request was still running (${Math.round((lastModelItem.text?.length ?? 0) / 4).toLocaleString("en-US")} tokens of thinking so far)`); }
   if (end?.finished && v.reward !== null && v.reward !== undefined && v.reward < 1) add("claimed-done-failed", `finish: ${clip(items.find((x) => x.t === "finish")?.text ?? end.text, 180)}`);

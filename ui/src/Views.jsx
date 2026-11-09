@@ -7,7 +7,7 @@ const REPO_URL = "https://github.com/amirsdream/Amness";
 const GUARDS = ["coverage", "toolcache", "nudge", "loop", "compact", "readdelta", "stuck", "wrapup", "condense", "schedule", "ledger", "stagnation", "review", "redact", "pin", "anchor", "audit"];
 const OPTIONS = [
   ["endpoint", "the model server's base URL (custom and ollama models)"], ["thinking_budget", "most thinking tokens per request (llama.cpp)"], ["off", "guards switched off, comma separated"],
-  ["tool_choice", "auto or required"], ["max_steps", "most model turns"], ["max_time", "seconds (default: the task's limit minus a margin)"], ["request", "JSON of extra request fields"],
+  ["keep_thinking", "true: send the model's earlier thinking back (Amness 0.7.4+)"], ["tool_choice", "auto or required"], ["max_steps", "most model turns"], ["max_time", "seconds (default: the task's limit minus a margin)"], ["request", "JSON of extra request fields"],
   ["effort", "reasoning effort"], ["context_window", "the model's window in tokens"], ["max_tokens", "token cap for the run"], ["api", "auto, responses or chat"], ["verify", "a command that must pass before finishing"],
   ["plugin", "plugin files on the studio's machine"], ["runtime", "cache (default) or off"], ["package", "a .tgz path (prefer a build)"],
 ];
