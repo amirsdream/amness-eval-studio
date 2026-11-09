@@ -218,7 +218,7 @@ function Queue({ ov }) {
     <section className="card">
       <h2>Up next</h2>
       {ov.upcoming.length ? <ol className="queue">{ov.upcoming.map((r) => <li key={runKey(r)}><span className="dotc" style={{ background: variantColor(ov.variants, r.variant) }} /> <span className="mono">{r.task}</span> <span className="muted">· {r.variant}{ov.trials > 1 ? ` · t${r.trial}` : ""}</span></li>)}</ol> : <div className="empty">Nothing left.</div>}
-      {ov.left > ov.upcoming.length + (ov.current ? 1 : 0) && <div className="muted small">and {ov.left - ov.upcoming.length - (ov.current ? 1 : 0)} more</div>}
+      {ov.left > ov.upcoming.length + (ov.current ? 1 : 0) ? <div className="muted small">and {ov.left - ov.upcoming.length - (ov.current ? 1 : 0)} more</div> : null}
     </section>
   );
 }

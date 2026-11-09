@@ -29,6 +29,7 @@ function runOne(c, r, say, onChild) {
       const t = trialDir(job); if (!t || !existsSync(join(t, "result.json"))) return ok(undefined);
       let d; try { d = JSON.parse(readFileSync(join(t, "result.json"), "utf8")); } catch { return ok(undefined); }
       const a = d.agent_result ?? {};
+      if (d.exception_info?.exception_type === "CancelledError") { say("  cancelled (Harbor was stopped): not a result"); return ok(undefined); }
       if (d.exception_info && !d.agent_execution) { say(`  setup failed: ${d.exception_info.exception_type}: ${String(d.exception_info.exception_message ?? "").split("\n")[0].slice(0, 200)}`); return ok(undefined); }
       ok({ ...r, reward: d.verifier_result?.rewards?.reward ?? 0, exception: d.exception_info?.exception_type ?? null, tokensIn: a.n_input_tokens ?? null, tokensCached: a.n_cache_tokens ?? null,
         tokensOut: a.n_output_tokens ?? null, cost: a.cost_usd ?? null, seconds: Math.round((Date.now() - t0) / 1000), job, at: new Date().toISOString() });

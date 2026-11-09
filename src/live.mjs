@@ -4,8 +4,9 @@
 // The conversation is a list of items (system prompt, task, step, thinking, text, tool call, edit, guard action, audit, finish, end). Items change
 // while they stream (thinking grows, a tool call gets its result), so each carries `seq`, the change counter when it last changed: a client that
 // has seen up to seq N asks for the items with seq > N and replaces them by index.
-import { existsSync, readdirSync, readFileSync, statSync, openSync, readSync, closeSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync, openSync, readSync, closeSync, appendFileSync, mkdirSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { basename, join } from "node:path";
 import { paths } from "./campaign.mjs";
 
 const cache = new Map();   // job -> the parsed log so far
@@ -19,6 +20,35 @@ export function trialDir(job) {
   const t = readdirSync(jd).find((d) => { try { return statSync(join(jd, d)).isDirectory(); } catch { return false; } });
   return t ? join(jd, t) : null;
 }
+
+// Harbor copies the agent's logs out of the container only when the run ends. While it runs, `mirror` copies the new part of the log
+// out of the container (docker exec) into <data>/.live/<job>/, and the view reads that copy.
+const mirrors = new Map();   // job -> { busy, size, container }
+const docker = (args) => new Promise((ok) => execFile("docker", args, { maxBuffer: 64 << 20, timeout: 20_000, encoding: "buffer" }, (err, out) => ok(err ? null : out)));
+const liveDir = (job) => join(paths.data, ".live", job);
+
+/** Copy what the running agent has written since the last call. Cheap to call every second; one copy at a time per job. */
+export async function mirror(job) {
+  const t = trialDir(job); if (!t || existsSync(join(t, "result.json")) && existsSync(join(t, "agent", "amness.jsonl"))) return;
+  const m = mirrors.get(job) ?? { busy: false, size: {}, container: null }; mirrors.set(job, m);
+  if (m.busy) return; m.busy = true;
+  try {
+    if (!m.container) {
+      const project = basename(t).toLowerCase() + "__env";
+      m.container = String((await docker(["ps", "-q", "--filter", `label=com.docker.compose.project=${project}`, "--filter", "label=com.docker.compose.service=main"])) ?? "").trim().split("\n")[0] || null;
+      if (!m.container) return;
+    }
+    mkdirSync(liveDir(job), { recursive: true });
+    for (const [file, from] of [["amness.jsonl", "/logs/agent/amness.jsonl"], ["amness.stderr", "/logs/agent/amness.stderr"], ["test-stdout.txt", "/logs/verifier/test-stdout.txt"]]) {
+      const have = m.size[file] ?? 0, out = await docker(["exec", m.container, "sh", "-c", `[ -f ${from} ] && tail -c +${have + 1} ${from} || true`]);
+      if (out === null) { m.container = null; break; }   // the container is gone: the run is ending
+      if (out.length) { appendFileSync(join(liveDir(job), file), out); m.size[file] = have + out.length; }
+    }
+  } finally { m.busy = false; }
+}
+
+/** Drop the copies of finished runs (Harbor has the real logs by then). */
+export function forget(job) { mirrors.delete(job); rmSync(liveDir(job), { recursive: true, force: true }); }
 
 const fresh = () => ({ size: 0, rest: "", seq: 0, items: [], tools: new Map(), steps: new Map(), open: { thinking: null, text: null }, modelText: false,
   usage: { requests: 0, prompt: 0, cached: 0, completion: 0, reasoning: 0, perRequest: [] }, step: null, max: null, agentPhase: null, result: null });
@@ -95,16 +125,18 @@ const span = (x) => (x?.started_at ? { start: x.started_at, end: x.finished_at ?
 /** Everything the UI shows about one job. Chat items newer than `since` (a seq; -1 for none, 0 for all). */
 export function jobView(job, since = 0) {
   const t = trialDir(job); if (!t) return { job, phase: "starting", items: [], seq: 0, usage: null };
-  const agentLog = join(t, "agent", "amness.jsonl"), result = join(t, "result.json"), verifier = join(t, "verifier");
-  const c = existsSync(agentLog) ? conversation(job, agentLog) : null;
+  const result = join(t, "result.json"), verifier = join(t, "verifier"), copy = liveDir(job);
+  const pick = (real, name) => (existsSync(real) ? real : existsSync(join(copy, name)) ? join(copy, name) : null);   // Harbor's copy once the run ended, else ours
+  const agentLog = pick(join(t, "agent", "amness.jsonl"), "amness.jsonl"), testsOut = pick(join(verifier, "test-stdout.txt"), "test-stdout.txt");
+  const c = agentLog ? conversation(job, agentLog) : null;
   let res = null; try { res = existsSync(result) ? JSON.parse(readFileSync(result, "utf8")) : null; } catch { /* written in pieces */ }
-  const tests = existsSync(join(verifier, "test-stdout.txt")) ? tail(join(verifier, "test-stdout.txt"), 12_000) : "";
-  const phase = res?.finished_at ? "done" : tests || existsSync(join(verifier, "reward.txt")) || res?.verifier ? "testing" : c || res?.agent_execution ? "agent" : res?.agent_setup ? "installing" : "setting up";
+  const tests = testsOut ? tail(testsOut, 12_000) : "";
+  const phase = res?.finished_at ? "done" : tests || existsSync(join(verifier, "reward.txt")) || res?.verifier || c?.result ? "testing" : c || res?.agent_execution ? "agent" : res?.agent_setup ? "installing" : "setting up";
   return {
     job, phase, task: res?.task_name, items: since < 0 || !c ? [] : c.items.filter((x) => x.seq > since), seq: c?.seq ?? 0, count: c?.items.length ?? 0,
     usage: c?.usage ?? null, step: c?.step ?? null, maxSteps: c?.max ?? null, agentPhase: c?.agentPhase ?? null, final: c?.result ?? null,
     timing: res ? { environment: span(res.environment_setup), install: span(res.agent_setup), agent: span(res.agent_execution), tests: span(res.verifier) } : null,
     tests, reward: res?.verifier_result?.rewards?.reward ?? null, exception: res?.exception_info ? { type: res.exception_info.exception_type, message: String(res.exception_info.exception_message ?? "").slice(0, 2000) } : null,
-    stderr: tail(join(t, "agent", "amness.stderr"), 4000), started: res?.started_at ?? null, finished: res?.finished_at ?? null,
+    stderr: tail(pick(join(t, "agent", "amness.stderr"), "amness.stderr") ?? "", 4000), started: res?.started_at ?? null, finished: res?.finished_at ?? null,
   };
 }

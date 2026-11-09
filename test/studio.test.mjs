@@ -61,7 +61,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs"; import { join 
 const a = process.argv.slice(2), o = a[a.indexOf("-o") + 1], job = a[a.indexOf("--job-name") + 1], task = a[a.indexOf("-i") + 1], t = join(o, job, task + "__x"); mkdirSync(t, { recursive: true });
 const m = readFileSync(${JSON.stringify(mode)}, "utf8").trim();
 if (m === "slow") { process.on("SIGINT", () => process.exit(130)); await new Promise((ok) => setTimeout(ok, 400)); }
-writeFileSync(join(t, "result.json"), JSON.stringify(m === "setup" ? { exception_info: { exception_type: "RuntimeError", exception_message: "docker: compose missing" } }
+writeFileSync(join(t, "result.json"), JSON.stringify(m === "cancel" ? { agent_execution: {}, exception_info: { exception_type: "CancelledError" } } : m === "setup" ? { exception_info: { exception_type: "RuntimeError", exception_message: "docker: compose missing" } }
   : { agent_execution: {}, agent_result: { n_input_tokens: 123 }, verifier_result: { rewards: { reward: task === "alpha" ? 1 : 0 } } }));
 `); chmodSync(fake, 0o755); process.env.HARBOR = fake;
   const said = []; const c = loadCampaign("demo");
@@ -71,6 +71,7 @@ writeFileSync(join(t, "result.json"), JSON.stringify(m === "setup" ? { exception
   writeFileSync(mode, "setup"); const code = await run("demo2", { minutes: 0, say: (m) => said.push(m) });
   assert.equal(code, 1); assert.equal(results(loadCampaign("demo2")).length, 0); assert.equal(pending(loadCampaign("demo2")).length, 2);
   assert.ok(said.some((s) => /setup failed: RuntimeError: docker: compose missing/.test(s)) && said.some((s) => /three runs in a row/.test(s)));
+  writeFileSync(mode, "cancel"); assert.equal(await run("demo2", { minutes: 0, say: () => {} }), 1); assert.equal(results(loadCampaign("demo2")).length, 0);   // a cancelled run is not a result
 });
 
 test("runner: pause stops after the run in progress; stop now interrupts it without a result; start resumes", async () => {
@@ -105,4 +106,13 @@ test("server: serves the built UI and the API, and the controls need the token",
     assert.equal((await post({ action: "fly" }, "s3cret")).status, 400);
     const st = await (await fetch(base + "/api/state")).json(); assert.equal(st.auth, true);
   } finally { srv.close(); }
+});
+
+test("live view: while Harbor has not copied the log out yet, the studio's own copy from the container is read", () => {
+  const t = join(root, "data", "jobs", "job-2", "beta__xyz"); mkdirSync(join(t, "agent"), { recursive: true });
+  const copy = join(root, "data", ".live", "job-2"); mkdirSync(copy, { recursive: true });
+  writeFileSync(join(copy, "amness.jsonl"), JSON.stringify({ kind: "run", messages: [{ role: "user", content: "hi" }] }) + "\n" + JSON.stringify({ kind: "result", finished: true, text: "ok" }) + "\n");
+  writeFileSync(join(copy, "amness.stderr"), "warn");
+  const v = jobView("job-2");
+  assert.deepEqual(v.items.map((i) => i.t), ["user", "end"]); assert.equal(v.phase, "testing"); assert.equal(v.stderr, "warn");
 });
