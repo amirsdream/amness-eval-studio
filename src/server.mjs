@@ -21,8 +21,9 @@ export function overview(name) {
 }
 
 export function serve({ port = 8090, host = "0.0.0.0" } = {}) {
-  const send = (res, code, body, type = "application/json") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff" }); res.end(typeof body === "string" ? body : JSON.stringify(body)); };
-  createServer((req, res) => {
+  let server;
+  const send = (res, code, body, type = "application/json") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
+  server = createServer((req, res) => {
     const u = new URL(req.url, "http://x"), p = u.pathname;
     try {
       if (req.method !== "GET") return send(res, 405, { error: "read-only" });
@@ -49,4 +50,5 @@ export function serve({ port = 8090, host = "0.0.0.0" } = {}) {
       return send(res, 200, readFileSync(f), TYPES[extname(f)] ?? "application/octet-stream");
     } catch (e) { return send(res, 500, { error: e.message }); }
   }).listen(port, host, () => console.log(`Amness Evaluation Studio: http://${host === "0.0.0.0" ? "<this machine>" : host}:${port}/ (read-only)`));
+  return server;
 }

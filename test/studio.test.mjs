@@ -57,3 +57,16 @@ writeFileSync(join(t, "result.json"), JSON.stringify(m === "setup" ? { exception
   assert.equal(code, 1); assert.equal(results(loadCampaign("demo2")).length, 0); assert.equal(pending(loadCampaign("demo2")).length, 2);
   assert.ok(said.some((s) => /setup failed: RuntimeError: docker: compose missing/.test(s)) && said.some((s) => /three runs in a row/.test(s)));
 });
+
+test("server: serves the UI files as they are, the API as JSON, and refuses writes", async () => {
+  const { serve } = await import("../src/server.mjs");
+  const srv = serve({ port: 0, host: "127.0.0.1" }); await new Promise((ok) => srv.once("listening", ok));
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const page = await fetch(base + "/"); assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8"); assert.match(await page.text(), /^<!doctype html>/);
+    assert.match(await (await fetch(base + "/app.js")).text(), /EventSource/);
+    assert.ok((await (await fetch(base + "/api/campaigns")).json()).some((c) => c.name === "demo"));
+    assert.equal((await fetch(base + "/api/campaigns", { method: "POST" })).status, 405);
+    assert.equal((await fetch(base + "/../package.json")).status, 404);
+  } finally { srv.close(); }
+});
