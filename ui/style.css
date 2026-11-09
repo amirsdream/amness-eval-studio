@@ -1,0 +1,43 @@
+:root {
+  --bg: #0d1015; --card: #141922; --card2: #1a202b; --line: #252d3a; --fg: #e6e9ef; --mut: #8d98ab; --faint: #5d6779;
+  --acc: #8b7cf6; --ok: #4ccf8a; --no: #f2696b; --warn: #f2b84b; --info: #5ec4e8; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) { :root { --bg: #f6f7f9; --card: #fff; --card2: #f1f3f6; --line: #e1e5eb; --fg: #18202e; --mut: #5b6577; --faint: #98a1b0; --acc: #6d5ce8; --ok: #18a058; --no: #d43f42; --warn: #b7791f; --info: #0f8fbd; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 650; display: flex; align-items: center; gap: 8px; } .mark { width: 12px; height: 12px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 25%, transparent); }
+select { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font: inherit; }
+.spacer { flex: 1; } .conn { font-size: 12px; color: var(--mut); } .conn.on::before { content: "● "; color: var(--ok); } .conn.off::before { content: "● "; color: var(--no); }
+main { max-width: 1200px; margin: 0 auto; padding: 14px 16px 40px; display: grid; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); margin: 0 0 10px; font-weight: 650; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; } @media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.muted { color: var(--mut); } .small { font-size: 12px; } .mono { font-family: var(--mono); }
+.bar { height: 8px; background: var(--card2); border-radius: 4px; overflow: hidden; margin: 10px 0 8px; } .bar > i { display: block; height: 100%; background: var(--acc); transition: width .6s; }
+.kv { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; } .kv b { font-weight: 600; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; }
+.tile { background: var(--card2); border-radius: 9px; padding: 8px 10px; } .tile .v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; } .tile .l { font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; }
+.steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; } .steps span { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--card2); color: var(--faint); }
+.steps span.done { color: var(--ok); } .steps span.now { background: color-mix(in srgb, var(--acc) 22%, transparent); color: var(--fg); font-weight: 600; }
+.feed { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--card2); font-size: 12.5px; }
+.ev { display: grid; grid-template-columns: 22px 92px minmax(0, 1fr); gap: 6px; padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); align-items: start; }
+.ev .ic { text-align: center; } .ev .nm { color: var(--mut); font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .tx { overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; } .ev.say .tx, .ev.end .tx { font-family: inherit; font-size: 12.5px; }
+.ev.result .tx { color: var(--mut); } .ev.err .tx { color: var(--no); } .ev.guard .nm { color: var(--warn); } .ev.edit .nm { color: var(--info); } .ev.end { background: color-mix(in srgb, var(--acc) 10%, transparent); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; } th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { color: var(--mut); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; } td.num { font-variant-numeric: tabular-nums; text-align: right; } th.num { text-align: right; }
+.scroll { overflow-x: auto; }
+.rate { display: flex; align-items: center; gap: 8px; } .rate .track { position: relative; width: 90px; height: 8px; background: var(--card2); border-radius: 4px; }
+.rate .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ok); border-radius: 4px; } .rate .ci { position: absolute; top: -3px; bottom: -3px; border-left: 2px solid var(--fg); border-right: 2px solid var(--fg); opacity: .45; }
+.win { color: var(--ok); } .loss { color: var(--no); }
+.cell { display: inline-block; min-width: 64px; text-align: center; padding: 3px 6px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid transparent; }
+.cell.pass { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); } .cell.fail { background: color-mix(in srgb, var(--no) 15%, transparent); color: var(--no); }
+.cell.timeout { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); } .cell.running { border-color: var(--acc); color: var(--acc); animation: pulse 1.6s infinite; } .cell.pending { color: var(--faint); cursor: default; }
+@keyframes pulse { 50% { opacity: .45; } } @media (prefers-reduced-motion: reduce) { .cell.running { animation: none; } .bar > i { transition: none; } }
+.hist td { cursor: pointer; } .hist tr:hover td { background: var(--card2); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100vw); background: var(--card); border-left: 1px solid var(--line); z-index: 10; overflow: auto; padding: 16px; box-shadow: -10px 0 40px rgba(0,0,0,.35); }
+.drawer.hidden { display: none; } .drawer .close { float: right; background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+pre { background: var(--card2); border: 1px solid var(--line); border-radius: 9px; padding: 10px; overflow: auto; max-height: 340px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.spark { display: block; width: 100%; height: 36px; } .spark path { fill: none; stroke: var(--info); stroke-width: 1.5; } .spark .area { fill: color-mix(in srgb, var(--info) 15%, transparent); stroke: none; }
+.empty { color: var(--mut); padding: 6px 0; } label.auto { font-size: 12px; color: var(--mut); display: inline-flex; gap: 4px; align-items: center; float: right; }

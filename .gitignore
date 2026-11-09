@@ -1,0 +1,5 @@
+# results, Harbor jobs and trajectories stay on the machine that ran them
+data/
+node_modules/
+*.tgz
+__pycache__/

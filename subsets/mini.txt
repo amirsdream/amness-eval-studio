@@ -1,0 +1,10 @@
+# tb2-mini: a small, cheap slice of Terminal-Bench 2.0 for everyday comparisons (8 of 89 tasks).
+# The 4 easy tasks, plus 4 medium tasks from different categories with no GPU, large download or VM.
+fix-git
+overfull-hbox
+cobol-modernization
+prove-plus-comm
+regex-log
+sqlite-db-truncate
+openssl-selfsigned-cert
+polyglot-c-py

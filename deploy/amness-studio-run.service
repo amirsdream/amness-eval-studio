@@ -1,0 +1,19 @@
+[Unit]
+Description=Amness Evaluation Studio: run a campaign (resumable)
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+# Set the campaign with: systemctl edit amness-studio-run  (Environment=CAMPAIGN=...)
+Environment=CAMPAIGN=streams
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/root
+WorkingDirectory=/opt/amness-eval-studio
+ExecStart=/usr/bin/node bin/studio.mjs run ${CAMPAIGN} --minutes 0
+Restart=on-failure
+RestartSec=300
+KillSignal=SIGTERM
+TimeoutStopSec=1800
+
+[Install]
+WantedBy=multi-user.target
