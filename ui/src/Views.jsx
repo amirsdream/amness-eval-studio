@@ -10,7 +10,7 @@ const OPTIONS = [
   ["keep_thinking", "true: send the model's earlier thinking back (Amness 0.7.4+)"], ["tool_choice", "auto or required"], ["max_steps", "most model turns"], ["max_time", "seconds (default: the task's limit minus a margin)"], ["request", "JSON of extra request fields"],
   ["effort", "reasoning effort"], ["context_window", "the model's window in tokens"], ["max_tokens", "token cap for the run"], ["api", "auto, responses or chat"], ["verify", "a command that must pass before finishing"],
   ["explore_model", "the explorer's model: id, provider:model or server:<name> (Amness 0.8.0+)"], ["compact_model", "the model that writes handoff notes (0.8.0+)"],
-  ["review_model", "the reviewer's model (0.8.0+)"], ["cheap_model", "the router's cheap model (0.8.0+)"], ["advisor_model", "a stronger model to consult (0.8.0+)"],
+  ["review_model", "the reviewer's model (0.8.0+)"], ["approve_model", "the approval reviewer's model (0.8.0+)"], ["quarantine_model", "the reader of untrusted text (0.8.0+)"], ["cheap_model", "the router's cheap model (0.8.0+)"], ["advisor_model", "a stronger model to consult (0.8.0+)"],
   ["fallback", "the model to answer when the main one is down (0.8.0+)"], ["ladder", "recovery ladder: model references, cheapest first (0.8.0+)"], ["ladder_start", "the ladder's first rung (0.8.0+)"],
   ["local_weight", "0-1: how much a local token counts against the cap (0.8.0+)"], ["router", "true: route exploration to cheap_model (0.8.0+)"], ["subagents", "true: offer the task tool (0.8.0+)"],
   ["explore_ranges", "true: the explorer answers with checked file ranges (0.8.0+)"], ["stable_tools", "true: a fixed tool list, the prefix cache survives (0.8.0+)"],

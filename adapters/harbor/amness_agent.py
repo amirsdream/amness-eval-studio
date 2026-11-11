@@ -18,7 +18,7 @@ Models per job (Amness 0.8.0+): explore_model, compact_model, review_model, chea
 reference: a bare id on the main provider, provider:model, or server:<name>[/model]), ladder (references, cheapest first, comma separated), ladder_start, local_weight (0-1).
 Switches (true/false; Amness 0.8.0+): router, subagents, explore_ranges, stable_tools. servers (a JSON list of {"name","baseUrl","model"[,"provider"]}, or name=url,...)
 saves servers in the container's Amness home, so server:<name> references work there. profile (a JSON object: the model's profile, such as {"tier":"local"}),
-with the shortcuts tier (local, mid or frontier) and text_tool_calls (true); it is written as the default profile in the container's Amness home.
+with the shortcuts tier (local, mid or frontier) and text_tool_calls (true); it is written for the main model only, so jobs on other models keep their own settings.
 No git is installed: Amness needs it only for undo snapshots and worktrees, which benchmark runs do not use, and the task's environment stays as published.
 
     python amness_agent.py prepare <package.tgz>   unpack the package's bundle on the host once and print the folder to mount at /opt/amness-rt
@@ -277,7 +277,7 @@ class Amness(BaseInstalledAgent):
             env["AMNESS_STUDIO_CONFIG"] = json.dumps({"servers": [{**x, "model": x["model"] or model} for x in self.servers]})
             home += 'printf \'%s\' "$AMNESS_STUDIO_CONFIG" > /tmp/amness-home/config.json; '
         if self.profile:
-            env["AMNESS_STUDIO_PROFILE"] = json.dumps({"default": self.profile})
+            env["AMNESS_STUDIO_PROFILE"] = json.dumps({"models": {model: self.profile}})   # the main model only: a job on another model keeps its own settings
             home += 'printf \'%s\' "$AMNESS_STUDIO_PROFILE" > /tmp/amness-home/profile.json; '
         for flag, value in self.flags.items():
             if value not in (None, ""):
