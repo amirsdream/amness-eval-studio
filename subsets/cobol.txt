@@ -1,0 +1,2 @@
+# One task, for checks that need a single long-investigation task (cobol-modernization: binary data files, read mostly through the shell).
+cobol-modernization
