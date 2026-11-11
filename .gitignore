@@ -2,3 +2,5 @@ node_modules/
 data/
 ui/dist/
 campaigns/*.json
+__pycache__/
+*.pyc
