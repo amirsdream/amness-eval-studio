@@ -19,6 +19,10 @@ export const CHECKS = {
   "timeout": { kind: "info", title: "Stopped at the time limit", why: "The run ended because its time was up." },
   "claimed-done-failed": { kind: "model", title: "Finished, but the tests failed", why: "The agent called finish, yet the task's tests failed: the harness's checks before finishing did not catch it." },
   "no-test-run": { kind: "info", title: "Finished without running a test", why: "The audit noted that no test command was run before finishing." },
+  "call-unfixable": { kind: "friction", title: "A tool call could not be read", why: "The model sent a tool call that was not valid JSON or did not fit the tool, and argfix could not correct it: a round trip lost. Is the model's tool format supported (textToolCalls, tool_choice)?" },
+  "call-fixed": { kind: "info", title: "Tool calls corrected (argfix)", why: "A malformed tool call was corrected in place and run. Each one saved a round trip; many of them point at the model's tool format." },
+  "takeover": { kind: "friction", title: "A worker on another model handed back", why: "A job on another model (explorer, subagent) stopped without an answer, so the main agent had to do that part itself: the worker's model may not qualify for the job (amness doctor)." },
+  "ladder": { kind: "info", title: "The recovery ladder acted", why: "The loop reflected, started again from a note, or moved between models. Did the move help?" },
   "guard": { kind: "info", title: "Guard actions", why: "The harness nudged, refused or steered the model. Were they needed?" },
   "no-result-line": { kind: "bug", title: "No result line", why: "The agent's log has no final result line: it crashed or was killed before it could report." },
   "stderr": { kind: "bug", title: "Errors on the agent's error output", why: "The agent wrote an error or warning to stderr." },
@@ -36,7 +40,11 @@ export function findings(job, view = null) {
   for (const it of items) {
     if (it.t === "step") step = it.step + 1;
     if (it.t === "thinking" && it.text.length > 24_000) add("long-thinking", `${Math.round(it.text.length / 4).toLocaleString("en-US")} tokens of thinking (about ${Math.round(it.text.length / 4 / 36 / 60)} min at 36 tokens/s)`, step);
-    if (it.t === "guard" && it.name !== "aborted") add("guard", `${it.name}: ${it.text}`, step);
+    if (it.t === "guard" && it.name === "repair") add("call-unfixable", it.text, step);
+    else if (it.t === "guard" && it.name === "argfix") add("call-fixed", it.text, step);
+    else if (it.t === "guard" && it.name === "takeover") add("takeover", it.text, step);
+    else if (it.t === "guard" && it.name === "ladder") add("ladder", it.text, step);
+    else if (it.t === "guard" && it.name !== "aborted") add("guard", `${it.name}: ${it.text}`, step);
     if (it.t === "audit" && it.notes?.some((n) => /no test command/.test(n))) add("no-test-run", it.notes.join("; "), step);
     if (it.t !== "tool" || it.result === null || it.result === undefined) continue;
     const r = String(it.result), a = it.args && typeof it.args === "object" ? it.args : {};

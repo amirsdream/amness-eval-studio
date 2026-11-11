@@ -14,6 +14,11 @@ thinking_budget (most thinking tokens per model request, for llama.cpp; Amness 0
 runtime (`cache`, default: Node and Amness are installed once on the host into a cached bundle; when that bundle is mounted at /opt/amness-rt (the studio passes
 `--mounts`, see `prepare` below) the container uses it as it is, otherwise it uploads and unpacks it, with no network either way; `off`: install them in every
 container with nvm and npm, as before). The bundle is rebuilt when the package changes; a container where it does not work (no glibc, another CPU) falls back.
+Models per job (Amness 0.8.0+): explore_model, compact_model, review_model, cheap_model, approve_model, quarantine_model, advisor_model, fallback (each a model
+reference: a bare id on the main provider, provider:model, or server:<name>[/model]), ladder (references, cheapest first, comma separated), ladder_start, local_weight (0-1).
+Switches (true/false; Amness 0.8.0+): router, subagents, explore_ranges, stable_tools. servers (a JSON list of {"name","baseUrl","model"[,"provider"]}, or name=url,...)
+saves servers in the container's Amness home, so server:<name> references work there. profile (a JSON object: the model's profile, such as {"tier":"local"}),
+with the shortcuts tier (local, mid or frontier) and text_tool_calls (true); it is written as the default profile in the container's Amness home.
 No git is installed: Amness needs it only for undo snapshots and worktrees, which benchmark runs do not use, and the task's environment stays as published.
 
     python amness_agent.py prepare <package.tgz>   unpack the package's bundle on the host once and print the folder to mount at /opt/amness-rt
@@ -134,19 +139,61 @@ def _runtime_dir(package: Path) -> Path:
     return out
 
 
+def _yes(v) -> bool:
+    return v is True or str(v).lower() in ("1", "true", "yes", "on")
+
+
+def _json_obj(v, what: str) -> dict:
+    """A JSON object given as text or already parsed by Harbor (`--ak profile={...}`)."""
+    if v in (None, ""):
+        return {}
+    o = json.loads(v) if isinstance(v, str) else v
+    if not isinstance(o, dict):
+        raise ValueError(f"{what} must be a JSON object")
+    return dict(o)
+
+
+def _servers(v) -> list[dict]:
+    """Saved servers for the container: a JSON list of {"name","baseUrl","model"[,"provider"]}, or `name=url[,name=url...]` (the model is then the main one)."""
+    if v in (None, ""):
+        return []
+    if isinstance(v, str) and not v.lstrip().startswith("["):
+        v = [{"name": n.strip(), "baseUrl": u.strip()} for n, u in (x.split("=", 1) for x in v.split(",") if "=" in x)]
+    items = json.loads(v) if isinstance(v, str) else v
+    if not isinstance(items, list) or not all(isinstance(x, dict) and x.get("name") and x.get("baseUrl") for x in items):
+        raise ValueError('servers must be a JSON list of {"name","baseUrl","model"} or name=url,...')
+    return [{"provider": x.get("provider", "custom"), "name": x["name"], "baseUrl": x["baseUrl"], "model": x.get("model", "")} for x in items]
+
+
 class Amness(BaseInstalledAgent):
     """Amness (https://github.com/amirsdream/Amness): a hackable coding-agent harness."""
 
     def __init__(self, *args, package: str = "local", endpoint: str | None = None, off: str | None = None, plugin: str | None = None,
                  effort: str | None = None, max_steps: int | None = None, max_tokens: int | None = None, context_window: int | None = None,
                  api: str | None = None, verify: str | None = None, max_time: int | None = None, tool_choice: str | None = None, runtime: str = "cache",
-                 thinking_budget: int | None = None, request: str | None = None, keep_thinking: bool | str | None = None, **kwargs):
+                 thinking_budget: int | None = None, request: str | None = None, keep_thinking: bool | str | None = None,
+                 explore_model: str | None = None, compact_model: str | None = None, review_model: str | None = None, cheap_model: str | None = None,
+                 approve_model: str | None = None, quarantine_model: str | None = None, advisor_model: str | None = None, fallback: str | None = None,
+                 ladder: str | None = None, ladder_start: int | None = None, local_weight: float | None = None,
+                 router: bool | str | None = None, subagents: bool | str | None = None, explore_ranges: bool | str | None = None, stable_tools: bool | str | None = None,
+                 servers: str | list | None = None, profile: str | dict | None = None, tier: str | None = None, text_tool_calls: bool | str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.package, self.endpoint, self.off, self.plugins = package, endpoint, off, [p for p in (plugin or "").split(",") if p]
         self.max_time, self.runtime = max_time, runtime
-        self.keep_thinking = str(keep_thinking).lower() in ("1", "true", "yes", "on")
+        self.keep_thinking = _yes(keep_thinking)
         self.flags = {"--effort": effort, "--max-steps": max_steps, "--max-tokens": max_tokens, "--context-window": context_window, "--api": api, "--verify": verify, "--tool-choice": tool_choice,
-                      "--thinking-budget": thinking_budget, "--request": request}
+                      "--thinking-budget": thinking_budget, "--request": request,
+                      "--explore-model": explore_model, "--compact-model": compact_model, "--review-model": review_model, "--cheap-model": cheap_model,
+                      "--approve-model": approve_model, "--quarantine-model": quarantine_model, "--advisor-model": advisor_model, "--fallback": fallback,
+                      "--ladder": ",".join(ladder) if isinstance(ladder, list) else ladder, "--ladder-start": ladder_start, "--local-weight": local_weight}
+        self.switches = [f for f, v in (("--router", router), ("--subagents", subagents), ("--explore-ranges", explore_ranges), ("--stable-tools", stable_tools)) if _yes(v)]
+        self.servers = _servers(servers)
+        prof = _json_obj(profile, "profile")
+        if tier:
+            prof["tier"] = tier
+        if text_tool_calls is not None:
+            prof["textToolCalls"] = _yes(text_tool_calls)
+        self.profile = prof
 
     def _task_timeout(self) -> float | None:
         """The task's agent time limit (task.toml `agent.timeout_sec` x the trial's multiplier), read from the trial's config and Harbor's task cache."""
@@ -224,10 +271,18 @@ class Amness(BaseInstalledAgent):
             args += ["--max-time", str(limit)]
         if self.keep_thinking:
             args += ["--keep-thinking"]
+        args += self.switches
+        home = ""
+        if self.servers:
+            env["AMNESS_STUDIO_CONFIG"] = json.dumps({"servers": [{**x, "model": x["model"] or model} for x in self.servers]})
+            home += 'printf \'%s\' "$AMNESS_STUDIO_CONFIG" > /tmp/amness-home/config.json; '
+        if self.profile:
+            env["AMNESS_STUDIO_PROFILE"] = json.dumps({"default": self.profile})
+            home += 'printf \'%s\' "$AMNESS_STUDIO_PROFILE" > /tmp/amness-home/profile.json; '
         for flag, value in self.flags.items():
             if value not in (None, ""):
                 args += [flag, json.dumps(value) if isinstance(value, (dict, list)) else str(value)]   # Harbor may hand `--ak request={...}` over already parsed
-        cmd = (f"{NODE}; mkdir -p /logs/agent; printf '%s' \"$AMNESS_TASK\" | amness {' '.join(shlex.quote(a) for a in args)} - "
+        cmd = (f"{NODE}; mkdir -p /logs/agent /tmp/amness-home; {home}printf '%s' \"$AMNESS_TASK\" | amness {' '.join(shlex.quote(a) for a in args)} - "
                "> /logs/agent/amness.jsonl 2> /logs/agent/amness.stderr; echo $? > /logs/agent/amness.exit; exit 0")   # exit 1 = not finished: the verifier decides, so the trial goes on
         await self.exec_as_agent(environment, command=cmd, env=env)
 

@@ -95,6 +95,9 @@ function fold(c, e) {
       for (const it of c.tools.values()) if (it.name === "finish" && it.status !== "done") { it.status = "done"; it.result = "accepted"; touch(c, it); }   // the harness answers finish itself
       add(c, { t: "finish", text: clip(e.summary ?? "") }); break;
     case "steer": add(c, { t: "steer", text: clip(e.text ?? "") }); break;
+    case "ladder": add(c, { t: "guard", name: "ladder", text: clip(`${e.action}: ${e.from} → ${e.to} (${e.reason}; risk ${e.risk})`, 2000) }); break;
+    case "takeover": add(c, { t: "guard", name: "takeover", text: clip(`${e.role} on ${e.model} handed back (${e.reason}; ${e.count} so far)`, 2000) }); break;
+    case "repair": add(c, { t: "guard", name: e.fixed ? "argfix" : "repair", text: clip(e.detail ?? "", 2000) }); break;
     case "policy": add(c, { t: "guard", name: "policy", text: `${e.tool}: ${e.action}${e.reason ? ` (${e.reason})` : ""}` }); break;
     case "result":
       for (const it of c.tools.values()) if (it.status !== "done") { it.status = "skipped"; touch(c, it); }   // planned but never run: the run ended first

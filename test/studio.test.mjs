@@ -135,6 +135,20 @@ test("harness checks: a guessed directory, a cut read, a re-read that adds nothi
   assert.equal(findings("job-3")[0].kind, "bug");
 });
 
+test("harness checks: tool calls argfix corrected or could not, a worker that handed back and the ladder (Amness 0.8.0 events) are found", async () => {
+  const { findings } = await import("../src/findings.mjs");
+  const t = join(root, "data", "jobs", "job-4", "delta__q"); mkdirSync(join(t, "agent"), { recursive: true });
+  const ev = [{ kind: "run", messages: [{ role: "user", content: "go" }] }, { kind: "phase", phase: "model", step: 0, max: 40 },
+    { kind: "repair", detail: "trailing comma removed", fixed: true }, { kind: "repair", detail: "invalid JSON: Unexpected end" },
+    { kind: "takeover", role: "explore", model: "server:lab/qwen", reason: "no answer", count: 1 },
+    { kind: "ladder", action: "escalate", from: "qwen", to: "luna", reason: "stuck", risk: 0.8 }, { kind: "result", finished: true, text: "ok" }];
+  writeFileSync(join(t, "agent", "amness.jsonl"), ev.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  writeFileSync(join(t, "result.json"), JSON.stringify({ finished_at: "x", verifier_result: { rewards: { reward: 1 } } }));
+  const fs = findings("job-4"), ids = fs.map((f) => f.id);
+  for (const id of ["call-fixed", "call-unfixable", "takeover", "ladder"]) assert.ok(ids.includes(id), `${id} in ${ids}`);
+  assert.ok(!ids.includes("guard")); assert.match(fs.find((f) => f.id === "takeover").evidence[0].text, /explore on server:lab\/qwen/);
+});
+
 test("builds: a packed file becomes an unchanging build with a manifest; a campaign's build replaces its package option, and each run records its setup", async () => {
   const { addBuild, resolveBuild, listBuilds, changelogSection, features } = await import("../src/builds.mjs");
   const { buildArgs, agentOptions } = await import("../src/setup.mjs");

@@ -4,11 +4,18 @@ import { Fragment, useEffect, useState } from "react";
 import { ago, fmtNum, pct, variantColor } from "./lib.js";
 
 const REPO_URL = "https://github.com/amirsdream/Amness";
-const GUARDS = ["coverage", "toolcache", "nudge", "loop", "compact", "readdelta", "stuck", "wrapup", "condense", "schedule", "ledger", "stagnation", "review", "redact", "pin", "anchor", "audit"];
+const GUARDS = ["coverage", "toolcache", "nudge", "loop", "compact", "readdelta", "stuck", "wrapup", "condense", "schedule", "ledger", "stagnation", "review", "redact", "pin", "anchor", "audit", "argfix", "hollow", "reread"];
 const OPTIONS = [
   ["endpoint", "the model server's base URL (custom and ollama models)"], ["thinking_budget", "most thinking tokens per request (llama.cpp)"], ["off", "guards switched off, comma separated"],
   ["keep_thinking", "true: send the model's earlier thinking back (Amness 0.7.4+)"], ["tool_choice", "auto or required"], ["max_steps", "most model turns"], ["max_time", "seconds (default: the task's limit minus a margin)"], ["request", "JSON of extra request fields"],
   ["effort", "reasoning effort"], ["context_window", "the model's window in tokens"], ["max_tokens", "token cap for the run"], ["api", "auto, responses or chat"], ["verify", "a command that must pass before finishing"],
+  ["explore_model", "the explorer's model: id, provider:model or server:<name> (Amness 0.8.0+)"], ["compact_model", "the model that writes handoff notes (0.8.0+)"],
+  ["review_model", "the reviewer's model (0.8.0+)"], ["cheap_model", "the router's cheap model (0.8.0+)"], ["advisor_model", "a stronger model to consult (0.8.0+)"],
+  ["fallback", "the model to answer when the main one is down (0.8.0+)"], ["ladder", "recovery ladder: model references, cheapest first (0.8.0+)"], ["ladder_start", "the ladder's first rung (0.8.0+)"],
+  ["local_weight", "0-1: how much a local token counts against the cap (0.8.0+)"], ["router", "true: route exploration to cheap_model (0.8.0+)"], ["subagents", "true: offer the task tool (0.8.0+)"],
+  ["explore_ranges", "true: the explorer answers with checked file ranges (0.8.0+)"], ["stable_tools", "true: a fixed tool list, the prefix cache survives (0.8.0+)"],
+  ["servers", "saved servers for server:<name> references: name=url,... or JSON (0.8.0+)"], ["tier", "local, mid or frontier: the model's prompt and tools (0.8.0+)"],
+  ["text_tool_calls", "true: take tool calls the model writes as text (0.8.0+)"], ["profile", "JSON: the model's profile in the container (0.8.0+)"],
   ["plugin", "plugin files on the studio's machine"], ["runtime", "cache (default) or off"], ["package", "a .tgz path (prefer a build)"],
 ];
 const short = (sha) => (sha ? sha.slice(0, 8) : "");

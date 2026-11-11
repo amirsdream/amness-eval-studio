@@ -51,7 +51,7 @@ The table shows which campaigns used each build and how they did. **New campaign
 
 1. A name, and the **purpose**: the question this campaign answers.
 2. The **version** (a build), the model, the task list and the number of trials.
-3. **Options for every variant**, such as `endpoint` (the model server), `thinking_budget`, `max_steps`, `tool_choice`, `request` (extra request fields as JSON). Suggestions appear as you type.
+3. **Options for every variant**, such as `endpoint` (the model server), `thinking_budget`, `max_steps`, `tool_choice`, `request` (extra request fields as JSON). With Amness 0.8.0 or later, also the models per job (`explore_model`, `advisor_model`, `ladder`, … with `servers` so that `server:<name>` works in the container), `stable_tools`, `tier` and `text_tool_calls`. Suggestions appear as you type.
 4. The **variants**. The first is the baseline. **＋ One guard off…** adds a variant with that guard switched off; **＋ Another version…** adds one that runs another build with the same settings. A variant's guards are picked from a list.
 5. **Create campaign**, optionally starting it at once.
 
@@ -71,7 +71,7 @@ The form writes `campaigns/<name>.json` on the studio's machine. You can also wr
 
 ## Harness checks: feedback on the agent itself
 
-Every run is read for patterns that point at the harness, not only the model: a guessed working directory, a file read that was cut, a re-read that delivered nothing new, a refused edit batch, a patch that did not apply, very long thinking, time running out mid-request, a finish whose tests then failed, errors on the agent's error output. Each check is marked **bug**, **friction**, **model** or **info**, with the evidence and links to the runs.
+Every run is read for patterns that point at the harness, not only the model: a guessed working directory, a file read that was cut, a re-read that delivered nothing new, a refused edit batch, a patch that did not apply, very long thinking, time running out mid-request, a finish whose tests then failed, errors on the agent's error output, and (Amness 0.8.0) tool calls that were corrected or could not be read, a worker on another model that handed its job back, and moves of the recovery ladder. Each check is marked **bug**, **friction**, **model** or **info**, with the evidence and links to the runs.
 
 `node bin/studio.mjs checks <campaign>` prints the same report in the terminal. The first campaign's checks found three Amness bugs, fixed in 0.7.2.
 

@@ -1,0 +1,61 @@
+{
+  "purpose": "Do Amness 0.8.0's new parts help a local model on Terminal-Bench? The full harness, each new guard switched off, and the new per-model settings switched on, one at a time.",
+  "about": "Copy this file to campaigns/ and set the endpoint to your model server, or create the campaign in the browser.",
+  "subset": "mini",
+  "model": "custom/qwen-vllm",
+  "build": "0.8.0",
+  "args": [
+    "--ak",
+    "endpoint=http://localhost:8000/v1",
+    "--ak",
+    "thinking_budget=4096",
+    "--ak",
+    "keep_thinking=true"
+  ],
+  "trials": 1,
+  "variants": {
+    "full": [],
+    "no-argfix": {
+      "args": [
+        "--ak",
+        "off=argfix"
+      ],
+      "note": "broken tool calls refused, not corrected"
+    },
+    "no-hollow": {
+      "args": [
+        "--ak",
+        "off=hollow"
+      ],
+      "note": "placeholder edits allowed"
+    },
+    "no-reread": {
+      "args": [
+        "--ak",
+        "off=reread"
+      ],
+      "note": "no requirement check at the first finish"
+    },
+    "tier-local": {
+      "args": [
+        "--ak",
+        "tier=local"
+      ],
+      "note": "the local prompt and the lean tool set"
+    },
+    "text-calls": {
+      "args": [
+        "--ak",
+        "text_tool_calls=true"
+      ],
+      "note": "tool calls written as text are taken"
+    },
+    "stable-tools": {
+      "args": [
+        "--ak",
+        "stable_tools=true"
+      ],
+      "note": "a fixed tool list"
+    }
+  }
+}
