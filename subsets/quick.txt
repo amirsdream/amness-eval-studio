@@ -1,0 +1,5 @@
+# tb2-quick: three easy tasks of tb2-mini for a baseline that fits in one 30-minute session (with max_time=600).
+# overfull-hbox is left out: on the local Qwen it ran out of time in every run so far.
+fix-git
+prove-plus-comm
+cobol-modernization
