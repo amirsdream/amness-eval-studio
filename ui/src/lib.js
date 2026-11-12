@@ -56,6 +56,7 @@ export function useStream(campaign) {
         if (d.live) {
           const items = live && live.job === d.live.job ? live.items.slice() : [];
           for (const it of d.live.items) items[it.i] = it;
+          if (typeof d.live.count === "number" && items.length > d.live.count) items.length = d.live.count;   // a trajectory that started over is shorter
           live = { ...d.live, items };
         }
         return { overview: d.overview ?? p.overview, state: d.state ?? p.state, live, conn: "live", error: null };

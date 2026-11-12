@@ -122,6 +122,42 @@ function conversation(job, file) {
   return c;
 }
 
+// Agents other than Amness (Harbor's terminus-2 and others) write a trajectory in Harbor's ATIF format (agent/trajectory.json), rewritten
+// in place as the run goes, on the host. It is read whole when it changed and turned into the same items; an item keeps its seq while it is
+// unchanged, so a client still gets only what is new or changed.
+const trajCache = new Map();   // job -> { size, mtime, seq, keys: string[], items, usage, step }
+function stepItems(st) {
+  const out = [], calls = st.tool_calls ?? [], results = st.observation?.results ?? [];
+  const text = typeof st.message === "string" ? st.message : content({ content: st.message });
+  if (st.source !== "agent") { if (text.trim()) out.push({ t: st.step_id === 1 ? "system" : "user", text: clip(text) }); return out; }
+  out.push({ t: "step", step: st.step_id, max: null, usage: st.metrics ? { prompt: st.metrics.prompt_tokens ?? 0, cached: st.metrics.cached_tokens ?? 0, completion: st.metrics.completion_tokens ?? 0, reasoning: 0 } : null });
+  const think = String(st.reasoning_content ?? "").replace(/^<think>\s*|\s*<\/think>$/g, "");
+  if (think.trim()) out.push({ t: "thinking", text: clip(think), live: false });
+  if (text.trim()) out.push({ t: "text", text: clip(text) });
+  calls.forEach((tc, k) => {
+    const own = results.filter((r) => r.source_call_id === tc.tool_call_id), loose = results.filter((r) => !r.source_call_id);
+    const res = own.length ? own : k === calls.length - 1 ? loose : [];   // a terminal agent's screen belongs to the whole batch: shown once, under its last command
+    const out1 = res.map((r) => (typeof r.content === "string" ? r.content : content({ content: r.content }))).join("\n");
+    out.push({ t: "tool", id: tc.tool_call_id, name: tc.function_name, args: tc.arguments ?? {}, status: res.length || !st.observation ? (res.length ? "done" : "running") : "done", result: res.length ? clip(out1) : null, error: false });
+  });
+  if (!calls.length && results.length) out.push({ t: "text", text: clip(results.map((r) => r.content).join("\n")) });
+  return out;
+}
+function trajectory(job, file) {
+  let st; try { st = statSync(file); } catch { return null; }
+  const c = trajCache.get(job) ?? { size: -1, mtime: 0, seq: 0, keys: [], items: [], usage: null, step: null, final: null };
+  if (st.size === c.size && st.mtimeMs === c.mtime) return c;
+  let t; try { t = JSON.parse(readFileSync(file, "utf8")); } catch { return c; }   // caught mid-write: keep the last good read
+  const items = (t.steps ?? []).flatMap(stepItems), keys = items.map((x) => JSON.stringify(x));
+  const usage = { requests: 0, prompt: 0, cached: 0, completion: 0, reasoning: 0, perRequest: [] };
+  for (const x of t.steps ?? []) if (x.metrics) { usage.requests++; usage.prompt += x.metrics.prompt_tokens ?? 0; usage.cached += x.metrics.cached_tokens ?? 0; usage.completion += x.metrics.completion_tokens ?? 0; usage.perRequest.push({ prompt: x.metrics.prompt_tokens ?? 0, cached: x.metrics.cached_tokens ?? 0, completion: x.metrics.completion_tokens ?? 0 }); }
+  items.forEach((x, i) => { x.i = i; x.seq = keys[i] === c.keys[i] ? c.items[i].seq : ++c.seq; });
+  if (items.length < c.items.length) c.seq++;   // shorter than before (a new attempt): the client starts over below
+  Object.assign(c, { size: st.size, mtime: st.mtimeMs, keys, items, usage, step: (t.steps ?? []).filter((x) => x.source === "agent").length || null, final: t.final_metrics ?? null, agent: t.agent ?? null });
+  trajCache.delete(job); trajCache.set(job, c); while (trajCache.size > 24) trajCache.delete(trajCache.keys().next().value);
+  return c;
+}
+
 const tail = (f, n = 4000) => { try { const t = readFileSync(f, "utf8"); return t.length > n ? "…" + t.slice(-n) : t; } catch { return ""; } };
 const span = (x) => (x?.started_at ? { start: x.started_at, end: x.finished_at ?? null } : null);
 
@@ -131,13 +167,14 @@ export function jobView(job, since = 0) {
   const result = join(t, "result.json"), verifier = join(t, "verifier"), copy = liveDir(job);
   const pick = (real, name) => (existsSync(real) ? real : existsSync(join(copy, name)) ? join(copy, name) : null);   // Harbor's copy once the run ended, else ours
   const agentLog = pick(join(t, "agent", "amness.jsonl"), "amness.jsonl"), testsOut = pick(join(verifier, "test-stdout.txt"), "test-stdout.txt");
-  const c = agentLog ? conversation(job, agentLog) : null;
+  const traj = agentLog ? null : existsSync(join(t, "agent", "trajectory.json")) ? join(t, "agent", "trajectory.json") : null;
+  const c = agentLog ? conversation(job, agentLog) : traj ? trajectory(job, traj) : null;
   let res = null; try { res = existsSync(result) ? JSON.parse(readFileSync(result, "utf8")) : null; } catch { /* written in pieces */ }
   const tests = testsOut ? tail(testsOut, 12_000) : "";
   const phase = res?.finished_at ? "done" : tests || existsSync(join(verifier, "reward.txt")) || res?.verifier || c?.result ? "testing" : c || res?.agent_execution ? "agent" : res?.agent_setup ? "installing" : "setting up";
   return {
     job, phase, task: res?.task_name, items: since < 0 || !c ? [] : c.items.filter((x) => x.seq > since), seq: c?.seq ?? 0, count: c?.items.length ?? 0,
-    usage: c?.usage ?? null, step: c?.step ?? null, maxSteps: c?.max ?? null, agentPhase: c?.agentPhase ?? null, final: c?.result ?? null,
+    usage: c?.usage ?? null, step: c?.step ?? null, maxSteps: c?.max ?? null, agentPhase: c?.agentPhase ?? (traj && !res?.finished_at ? "model" : null), final: c?.result ?? null, agent: traj ? c?.agent?.name ?? "other" : "amness",
     timing: res ? { environment: span(res.environment_setup), install: span(res.agent_setup), agent: span(res.agent_execution), tests: span(res.verifier) } : null,
     tests, reward: res?.verifier_result?.rewards?.reward ?? null, exception: res?.exception_info ? { type: res.exception_info.exception_type, message: String(res.exception_info.exception_message ?? "").slice(0, 2000) } : null,
     stderr: tail(pick(join(t, "agent", "amness.stderr"), "amness.stderr") ?? "", 4000), started: res?.started_at ?? null, finished: res?.finished_at ?? null,

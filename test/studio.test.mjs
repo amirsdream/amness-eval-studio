@@ -54,6 +54,21 @@ test("live view: phase, the conversation (streamed thinking and text, tool calls
   assert.equal(jobView("job-1", 0).count, 9);
 });
 
+test("live view: another agent's Harbor trajectory (terminus-2, ATIF) is shown live too, and only changed steps are sent again", () => {
+  const t = join(root, "data", "jobs", "job-t", "alpha__xyz"); mkdirSync(join(t, "agent"), { recursive: true });
+  const f = join(t, "agent", "trajectory.json"), steps = [{ step_id: 1, source: "user", message: "You are an AI assistant. Task: fix it" },
+    { step_id: 2, source: "agent", message: "Analysis: look first", reasoning_content: "<think>\nhmm\n</think>", tool_calls: [{ tool_call_id: "c1", function_name: "bash_command", arguments: { keystrokes: "ls\n" } }], metrics: { prompt_tokens: 100, completion_tokens: 20, cached_tokens: 50 } }];
+  const put = () => writeFileSync(f, JSON.stringify({ agent: { name: "terminus-2" }, steps }));
+  put(); let v = jobView("job-t");
+  assert.equal(v.agent, "terminus-2"); assert.equal(v.phase, "agent");
+  assert.deepEqual(v.items.map((i) => i.t), ["system", "step", "thinking", "text", "tool"]);
+  assert.deepEqual([v.items[2].text, v.items[4].name, v.items[4].args.keystrokes, v.items[4].status], ["hmm", "bash_command", "ls\n", "running"]);
+  assert.deepEqual([v.usage.requests, v.usage.prompt, v.usage.cached], [1, 100, 50]);
+  steps[1].observation = { results: [{ content: "a.py b.py" }] }; put();
+  v = jobView("job-t", v.seq);
+  assert.deepEqual(v.items.map((i) => i.t), ["tool"]); assert.deepEqual([v.items[0].result, v.items[0].status], ["a.py b.py", "done"]);   // only the step that changed
+});
+
 test("runner: saves each result, redoes a setup failure (agent never ran) without recording it, and stops after three in a row", async () => {
   const fake = join(root, "fake-harbor.mjs"), mode = join(root, "mode");
   writeFileSync(fake, `#!/usr/bin/env node
